@@ -27,15 +27,25 @@ POLICIES = ("tiered", "round_robin")
 class Account(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:8])
     label: str
-    kind: str = "openai-compat"  # provider-type id (display/preset only; all speak OpenAI shape)
+    kind: str = "openai-compat"  # provider-type id (display/preset only)
     base_url: str
     api_key: str = ""
     model: str = ""
     tier: str = "standard"
     enabled: bool = True
+    # Wire shape the router drives this account with: "openai" (/chat/completions) or
+    # "anthropic" (/messages). Defaults keep every pre-existing account on the OpenAI path.
+    api_style: str = "openai"
+    # Static headers to replay upstream (e.g. GitHub Copilot's editor headers).
+    extra_headers: dict[str, str] = Field(default_factory=dict)
+    # OAuth bookkeeping — set only for accounts created via a sign-in flow. When ``oauth_provider``
+    # is set and ``token_expiry`` has passed, the router refreshes ``api_key`` before use.
+    oauth_provider: str = ""
+    refresh_token: str = ""
+    token_expiry: float = 0.0  # absolute epoch seconds; 0 => unknown / never expires
 
     def masked(self) -> dict:
-        """Public view: never expose the raw key."""
+        """Public view: never expose the raw key or refresh token."""
         return {
             "id": self.id,
             "label": self.label,
@@ -44,6 +54,8 @@ class Account(BaseModel):
             "model": self.model,
             "tier": self.tier,
             "enabled": self.enabled,
+            "api_style": self.api_style,
+            "oauth_provider": self.oauth_provider,
             "key_set": bool(self.api_key),
             "key_hint": (self.api_key[-4:] if self.api_key else ""),
         }

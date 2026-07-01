@@ -26,4 +26,13 @@ questions, and to-dos. Human-readable and reviewable in the UI; also reusable by
 - [`../../i18n/`](../../i18n/README.md) — note bodies carry a language tag (English source;
   Vietnamese on demand).
 
-**Status:** skeleton — directory purpose only.
+## Export
+
+Findings render to a shareable **pentest report** — Markdown or JSON, worst-severity-first
+with a summary tally — via `report.py`. The backend serves it at `GET /runs/{id}/report`.
+
+**Status:** implemented — `contracts.py` (`Finding`, ordered `Severity`), `store.py`
+(`JsonlFindingStore`: append, `for_run`, `for_target`, `summary`), `report.py`
+(`render_markdown` / `render_json`). The loop writes a finding whenever `note_finding`
+succeeds; the API exposes `GET /findings` and `GET /runs/{id}/report`. Memory (agent working
+state) stays separate from findings (curated, exportable output).

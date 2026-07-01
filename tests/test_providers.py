@@ -14,7 +14,8 @@ from backend.providers import CATEGORIES, PROVIDER_TYPES, check_endpoint
 from backend.service import RunService
 
 REQUIRED = {
-    "id", "label", "category", "base_url", "default_model", "tier", "auth", "private", "note"
+    "id", "label", "category", "base_url", "default_model", "tier", "auth", "private",
+    "api_style", "flow", "risk", "note",
 }
 
 
@@ -23,7 +24,9 @@ def test_every_preset_has_the_required_fields():
     for p in PROVIDER_TYPES:
         assert REQUIRED <= set(p), f"{p.get('id')} missing {REQUIRED - set(p)}"
         assert p["category"] in CATEGORIES
-        assert p["auth"] in {"key", "none"}
+        assert p["auth"] in {"key", "none", "oauth"}
+        assert p["api_style"] in {"openai", "anthropic", "openai-responses", "cursor",
+                                  "gemini-cli", "kiro"}
 
 
 def test_provider_ids_are_unique_and_every_category_is_populated():
@@ -35,10 +38,19 @@ def test_provider_ids_are_unique_and_every_category_is_populated():
 
 def test_core_ids_present_and_custom_escape_hatch_exists():
     ids = {p["id"] for p in PROVIDER_TYPES}
-    # The curated essentials a pentester reaches for, plus the local proxies and the catch-all.
-    assert {"anthropic", "openai", "openrouter", "deepseek", "groq"} <= ids  # recommended
+    # A broad multi-provider catalogue across every category, plus both escape hatches.
+    assert {"anthropic", "openai", "openrouter", "deepseek", "groq", "mistral"} <= ids  # key/free
+    assert {"claude-code", "github-copilot", "codex", "cursor"} <= ids  # oauth sign-in
     assert {"ollama", "9router", "antigravity"} <= ids  # local & private
-    assert "openai-compat" in ids  # custom escape hatch (covers any other endpoint)
+    assert {"openai-compat", "anthropic-compat"} <= ids  # custom escape hatches
+
+
+def test_oauth_providers_declare_a_flow_and_apikey_providers_do_not():
+    for p in PROVIDER_TYPES:
+        if p["auth"] == "oauth":
+            assert p["flow"] in {"device", "pkce"}, p["id"]
+        else:
+            assert p["flow"] == "", p["id"]
 
 
 def test_local_providers_are_private_and_keyless():
@@ -46,8 +58,6 @@ def test_local_providers_are_private_and_keyless():
         if p["category"] == "local":
             assert p["private"] is True
             assert p["auth"] == "none"
-        if p["category"] == "recommended":
-            assert p["private"] is False
 
 
 # ── check_endpoint (injected poster → no network) ──
@@ -76,6 +86,21 @@ def test_check_endpoint_treats_transport_failure_as_unreachable():
 def test_check_endpoint_rejects_empty_base_url():
     r = check_endpoint("", "k")
     assert r["ok"] is False and r["status"] == 0
+
+
+def test_check_endpoint_uses_anthropic_shape_when_asked():
+    seen = {}
+
+    def capture(url, payload, headers, timeout):
+        seen["url"] = url
+        seen["headers"] = headers
+        return 200, "{}"
+
+    r = check_endpoint("https://x/v1", "k", "claude-x", api_style="anthropic", http_post=capture)
+    assert r == {"ok": True, "status": 200}
+    assert seen["url"].endswith("/messages")  # not /chat/completions
+    assert seen["headers"]["x-api-key"] == "k"
+    assert "anthropic-version" in seen["headers"]
 
 
 # ── API routes ──
@@ -132,7 +157,7 @@ def _post(url, body):
 def test_provider_types_route_returns_categorized_catalog(api):
     with urlopen(f"{api}/provider-types") as resp:
         catalog = json.loads(resp.read())
-    assert any(p["id"] == "openai" and p["category"] == "recommended" for p in catalog)
+    assert any(p["id"] == "openai" and p["category"] == "apikey" for p in catalog)
 
 
 def test_test_connection_route_probes_the_endpoint(api, chat_server):

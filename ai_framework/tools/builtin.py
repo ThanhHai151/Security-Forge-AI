@@ -7,17 +7,16 @@ localhost or an explicitly authorized target. ``note_finding`` is pure and alway
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
 from urllib.request import urlopen
 
-from ai_framework.tools.base import ToolContext
-
-_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+from ai_framework.tools.base import ToolContext, require_authorized
 
 
 class HttpGetTool:
     name = "http_get"
     description = "Fetch a URL with HTTP GET. Localhost or authorized targets only."
+    touches_network = True  # OPSEC pacing applies
+    mutating = False  # a plain GET is idempotent recon
 
     @property
     def json_schema(self) -> dict[str, Any]:
@@ -29,11 +28,7 @@ class HttpGetTool:
 
     def run(self, args: dict[str, Any], ctx: ToolContext) -> str:
         url = args["url"]
-        host = urlparse(url).hostname or ""
-        if host not in _LOCAL_HOSTS and host not in ctx.authorized_targets:
-            raise PermissionError(
-                f"target not authorized: {host!r} (authorize it in RunConfig.authorized_targets)"
-            )
+        require_authorized(url, ctx)
         with urlopen(url, timeout=10) as resp:  # noqa: S310 - host is gated above
             body = resp.read(4096).decode("utf-8", "replace")
             return f"HTTP {resp.status} {url}\n{body}"
@@ -41,7 +36,13 @@ class HttpGetTool:
 
 class NoteFindingTool:
     name = "note_finding"
-    description = "Record a structured finding (title + detail). Always safe."
+    description = (
+        "Record a structured finding for the report: title, detail, severity "
+        "(info|low|medium|high|critical), optional evidence, KB reference, and tags. "
+        "Local and always safe."
+    )
+    touches_network = False  # local only — no OPSEC pacing
+    mutating = False
 
     @property
     def json_schema(self) -> dict[str, Any]:
@@ -50,6 +51,17 @@ class NoteFindingTool:
             "properties": {
                 "title": {"type": "string"},
                 "detail": {"type": "string"},
+                "severity": {
+                    "type": "string",
+                    "enum": ["info", "low", "medium", "high", "critical"],
+                    "description": "Impact of the finding; defaults to info.",
+                },
+                "evidence": {
+                    "type": "string",
+                    "description": "The observed request/response or output that proves it.",
+                },
+                "kb_ref": {"type": "string", "description": "Related knowledge-base note id."},
+                "tags": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["title"],
         }
@@ -57,4 +69,5 @@ class NoteFindingTool:
     def run(self, args: dict[str, Any], ctx: ToolContext) -> str:
         title = args["title"]
         detail = args.get("detail", "")
-        return f"FINDING: {title}\n{detail}".rstrip()
+        severity = args.get("severity", "info")
+        return f"FINDING [{severity}]: {title}\n{detail}".rstrip()

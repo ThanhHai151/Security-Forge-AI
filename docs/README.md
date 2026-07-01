@@ -12,9 +12,13 @@ The two **project-wide overviews** live at the repository root, not here:
   — Hermes agent + Headroom design and build steps.
 - [`KNOWLEDGE_BASE.md`](KNOWLEDGE_BASE.md) — the web-security technique corpus and how it feeds the agent.
 - [`SKILLS_AND_I18N.md`](SKILLS_AND_I18N.md) — skill-manifest format and bilingual architecture.
-- [`RED_TEAM_OPSEC.md`](RED_TEAM_OPSEC.md) — red-team stealth / OPSEC & evasion tradecraft
-  (source concealment, time/locale, traffic blending, host evasion, footprint management),
-  each technique paired with its blue-team **detection counterpart** for the [`../defense/`](../defense/README.md) pillar.
+- [`EXTERNAL_TOOLKITS.md`](EXTERNAL_TOOLKITS.md) — how the three upstream toolkits (hackingtool,
+  Anthropic-Cybersecurity-Skills, Claude-BugHunter) fold into SecForge's pillars, and the safety
+  boundary that keeps their catalogs knowledge-only.
+- [`RED_TEAM_OPSEC.md`](RED_TEAM_OPSEC.md) ([Tiếng Việt](RED_TEAM_OPSEC.vi.md)) — red-team stealth / OPSEC
+  & evasion tradecraft (source concealment, time/locale, traffic blending, host evasion, footprint
+  management), each technique paired with its blue-team **detection counterpart** for the
+  [`../defense/`](../defense/README.md) pillar.
 
 ## Planned contents
 

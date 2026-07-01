@@ -1,5 +1,7 @@
 # Red-Team OPSEC, Stealth & Evasion — a tradecraft reference
 
+> **Language:** English · [Tiếng Việt](RED_TEAM_OPSEC.vi.md)
+
 > **What:** a conceptual reference on how a real red team stays covert during an
 > **authorized** engagement — concealing its source, blending into a target's network and
 > hosts, managing the artifacts it leaves behind, and avoiding self-attribution — and, for

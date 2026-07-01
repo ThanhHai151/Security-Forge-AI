@@ -65,4 +65,17 @@ def test_note_finding_is_pure():
     result = reg.execute(
         ToolCall(id="c1", name="note_finding", arguments={"title": "X", "detail": "Y"}), ctx
     )
-    assert result.ok and "FINDING: X" in result.log
+    assert result.ok and "FINDING [info]: X" in result.log
+
+
+def test_note_finding_records_severity():
+    reg = _registry()
+    result = reg.execute(
+        ToolCall(
+            id="c1",
+            name="note_finding",
+            arguments={"title": "SQLi", "detail": "boolean-based", "severity": "high"},
+        ),
+        ToolContext(),
+    )
+    assert result.ok and "FINDING [high]: SQLi" in result.log

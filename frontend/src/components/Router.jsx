@@ -15,7 +15,9 @@ import ConnectModal from "./ConnectModal";
 
 // Display order + the i18n key for each category heading.
 const CATEGORY_ORDER = [
-  { id: "recommended", key: "pvCatRecommended" },
+  { id: "oauth", key: "pvCatOAuth", note: "pvCatOAuthNote" },
+  { id: "free", key: "pvCatFree" },
+  { id: "apikey", key: "pvCatApiKey" },
   { id: "local", key: "pvCatLocal", note: "pvCatLocalNote" },
   { id: "custom", key: "pvCatCustom" },
 ];

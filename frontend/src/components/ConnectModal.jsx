@@ -19,6 +19,7 @@ import {
   testConnection,
   testAccount,
 } from "../lib/api";
+import OAuthConnect from "./OAuthConnect";
 
 const inputCls =
   "w-full bg-zinc-900/60 border border-white/[0.08] px-3 py-2 text-[13px] text-zinc-100 " +
@@ -154,11 +155,13 @@ function ConnectionRow({ a, t, onChanged }) {
  * }} props
  */
 export default function ConnectModal({ provider, connections, t, onClose, onChanged }) {
+  const isOAuth = provider.auth === "oauth";
   const needsKey = provider.auth === "key";
   const editableUrl = provider.category === "custom" || !provider.base_url;
   // Localized one-liner under the title (the catalog's English `note` is for developers only).
-  const hint =
-    provider.category === "custom"
+  const hint = isOAuth
+    ? t.oauthHint
+    : provider.category === "custom"
       ? t.pvHintCompat
       : provider.auth === "none"
         ? t.pvLocalNote
@@ -211,7 +214,14 @@ export default function ConnectModal({ provider, connections, t, onClose, onChan
     if (!baseUrl) return;
     setTest({ pending: true });
     try {
-      setTest(await testConnection({ base_url: baseUrl, api_key: apiKey, model }));
+      setTest(
+        await testConnection({
+          base_url: baseUrl,
+          api_key: apiKey,
+          model,
+          api_style: provider.api_style || "openai",
+        })
+      );
     } catch (e) {
       setTest({ ok: false, status: 0, error: String(e.message || e) });
     }
@@ -231,6 +241,7 @@ export default function ConnectModal({ provider, connections, t, onClose, onChan
         api_key: apiKey,
         model: model.trim(),
         tier,
+        api_style: provider.api_style || "openai",
       });
       setLabel("");
       setApiKey("");
@@ -275,7 +286,16 @@ export default function ConnectModal({ provider, connections, t, onClose, onChan
             </div>
           )}
 
-          {/* add-connection form */}
+          {/* OAuth providers get a sign-in flow instead of the key form. */}
+          {isOAuth ? (
+            <div className="space-y-3">
+              <p className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-200">
+                <Plus size={13} className="text-emerald-400" /> {t.oauthAddConn}
+              </p>
+              <OAuthConnect provider={provider} t={t} onConnected={onChanged} />
+            </div>
+          ) : (
+          /* add-connection form */
           <div className="space-y-3">
             <p className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-200">
               <Plus size={13} className="text-emerald-400" /> {t.pvAddConn}
@@ -395,6 +415,7 @@ export default function ConnectModal({ provider, connections, t, onClose, onChan
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

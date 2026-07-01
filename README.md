@@ -35,40 +35,74 @@ other `README.md` is scoped to the directory it lives in.
 
 ---
 
-## Quick start
+## Install & run
 
-**Prerequisites:** Python **3.11+**, Node.js **18+** (npm), and `make` (optional — the raw
-commands are shown alongside each target).
+One installer sets everything up: it creates an isolated Python environment, builds the
+Web UI, and puts a **`secforge`** command on your PATH. Then you just run `secforge`.
 
-### 1. Install
-
-```bash
-make install          # pip install -e ".[dev]"
-```
-
-### 2. Run the app (web UI + backend API)
+**Prerequisites:** the installer checks for and (where possible) auto-installs these, but
+you can also install them yourself first — **Python 3.11+**, **Git**, and **Node.js 18+**
+(npm, only needed for the Web UI).
 
 ```bash
-cd frontend
-npm install
-npm run dev:all       # starts Vite (web) and the Python API together
+git clone https://github.com/ThanhHai151/Security-Forge-AI.git
+cd Security-Forge-AI
 ```
 
-- Web UI: served by Vite (see the printed local URL, e.g. `http://127.0.0.1:5173`).
-- Backend API: `python -m backend.app` (run standalone via `npm run dev:backend`).
-
-### 3. Try the agent (offline, no API key)
+### 🐧 Linux &nbsp;/&nbsp; 🍎 macOS &nbsp;/&nbsp; WSL2
 
 ```bash
-make demo             # python -m ai_framework.demo --goal "Recon the target" \
-                      #   --target http://localhost:8000 --backend offline
+bash install.sh
 ```
 
-### 4. Optional: sandboxed labs
+### 🪟 Windows (PowerShell)
+
+```powershell
+# If scripts are blocked, allow this session first:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\install.ps1
+```
+
+### Start it
+
+Open a **new terminal** (so the updated PATH is picked up), then:
 
 ```bash
-make labs             # SECFORGE_LABS_ENABLED=1 python -m labs.server
+secforge            # interactive menu: 1) Web UI  2) Terminal UI  3) Serve only
 ```
+
+The Web UI opens in your browser at **http://localhost:61022**. Non-interactive commands
+are available too: `secforge web` (serve + open browser), `secforge tui` (terminal UI),
+`secforge serve` (serve only). Re-running the installer updates SecForge in place.
+
+---
+
+## Run from source (developers)
+
+Prefer live-reload while hacking on the code? Skip the installer and run the two dev
+servers directly (Vite on **:61020**, backend API on **:61021**):
+
+```bash
+pip install -e ".[dev]"     # or: make install
+cd frontend && npm install
+npm run dev:all             # starts Vite (web) + the Python API together
+```
+
+Try the agent offline (no API key needed):
+
+```bash
+make demo    # python -m ai_framework.demo --goal "Recon the target" --target http://localhost:8000 --backend offline
+```
+
+Optional sandboxed practice labs:
+
+```bash
+make labs    # SECFORGE_LABS_ENABLED=1 python -m labs.server
+```
+
+> **Configuration:** copy `.env.example` to `.env` to pick a model backend. The default is
+> `offline` (heuristic, no key) so everything runs out of the box; set `anthropic` or
+> `openrouter` and add a key for live LLM calls.
 
 ---
 

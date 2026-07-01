@@ -11,12 +11,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _new_id() -> str:
+    return uuid4().hex
 
 
 # --- Turn protocol (§2.2) ---------------------------------------------------
@@ -83,14 +88,21 @@ class RunConfig(BaseModel):
     model: str | None = None
     base_url: str | None = None
     authorized_targets: set[str] = Field(default_factory=set)
+    # OPSEC pacing: minimum seconds between network actions to the same host, plus up to
+    # this many seconds of random jitter. 0 = fire as fast as possible (default, so tests
+    # and the offline demo stay instant). Raise it to behave like a cautious operator.
+    opsec_min_interval: float = 0.0
+    opsec_jitter: float = 0.0
 
 
 class Run(BaseModel):
     """A completed (or in-progress) run: config + ordered transcript + outcome."""
 
+    id: str = Field(default_factory=_new_id)
     config: RunConfig
     transcript: list[Turn] = Field(default_factory=list)
-    # "incomplete" while running, then "done" / "step_budget_reached" / "error".
+    # "incomplete" while running, then "done" / "step_budget_reached" / "guardrail_halt" /
+    # "error".
     outcome: str = "incomplete"
     # Populated when ``outcome == "error"`` (e.g. proxy unreachable, missing API key).
     error: str = ""

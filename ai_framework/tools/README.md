@@ -36,5 +36,11 @@ logged, and reasoned about.
 
 Z4nzu / **hackingtool** — a menu/catalog of security tools organized by category.
 
-**Status:** implemented (starter set) — `base.py` (`Tool`, `ToolRegistry`, safety gate) plus
-`builtin.py` (`http_get` with target authorization, `note_finding`). Add more tools here.
+Every network tool declares two flags the loop reads: `touches_network` (so `opsec.py` paces
+it) and `mutating` (so `guardrails.py` gives state-changing calls a tighter leash). All network
+tools pass through `base.require_authorized` — the single scope choke point.
+
+**Status:** implemented — `base.py` (`Tool`, `ToolRegistry`, `require_authorized` gate),
+`builtin.py` (`http_get`, `note_finding` with severity/evidence), and `security.py` (recon &
+transform catalog: `http_request`, `inspect_headers`, `fetch_robots_sitemap`, `decode_encode`).
+Add more tools by dropping a class in `security.py` and registering it in `default_registry`.

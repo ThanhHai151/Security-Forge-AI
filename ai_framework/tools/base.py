@@ -9,16 +9,33 @@ failed result instead of crashing the loop. See ``docs/HERMES_INTEGRATION_STEPS.
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
+from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
 from ai_framework.agent.contracts import ToolCall, ToolResult
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 class ToolContext(BaseModel):
     """What a tool is allowed to know at execution time (the safety surface)."""
 
     authorized_targets: set[str] = set()
+
+
+def require_authorized(url: str, ctx: ToolContext) -> str:
+    """Return the host, or raise if it is neither localhost nor an authorized target.
+
+    The single choke point every network tool goes through, so the scope gate can never be
+    forgotten when a new tool is added (ARCHITECTURE.md › Safety).
+    """
+    host = urlparse(url).hostname or ""
+    if host not in LOCAL_HOSTS and host not in ctx.authorized_targets:
+        raise PermissionError(
+            f"target not authorized: {host!r} (authorize it in RunConfig.authorized_targets)"
+        )
+    return host
 
 
 @runtime_checkable

@@ -41,8 +41,16 @@ export const probeModels = (body) => send("POST", "/probe-models", body); // {ba
 export const setPolicy = (policy) => send("POST", "/router/policy", { policy });
 
 // Live connection tests -> { ok, status, error? }
-export const testConnection = (body) => send("POST", "/test-connection", body); // {base_url, api_key?, model?}
+export const testConnection = (body) => send("POST", "/test-connection", body); // {base_url, api_key?, model?, api_style?}
 export const testAccount = (id) => send("POST", `/accounts/${encodeURIComponent(id)}/test`);
+
+// ── OAuth sign-in flows (device-code + browser PKCE) ──
+export const getOAuthProviders = () => get("/oauth/providers"); // -> { id: {flow, supported, reason} }
+export const oauthStart = (provider) => send("POST", "/oauth/start", { provider });
+// device: -> {status:"pending"} | {status:"done", account}; pass a label to name the connection.
+export const oauthPoll = (session_id, label = "") => send("POST", "/oauth/poll", { session_id, label });
+export const oauthComplete = (session_id, code, label = "") =>
+  send("POST", "/oauth/complete", { session_id, code, label });
 
 // ── Memory (Hermes) ──
 export const getMemory = (target = "") =>

@@ -1,4 +1,4 @@
-import { CheckCircle, HardDrives } from "@phosphor-icons/react";
+import { CheckCircle, HardDrives, Warning } from "@phosphor-icons/react";
 
 /**
  * One provider in the catalog grid. Clicking it opens the connect/manage modal.
@@ -51,6 +51,14 @@ export default function ProviderCard({ provider, connections, onClick, t }) {
             >
               <HardDrives size={9} weight="fill" /> {t.pvLocalBadge}
             </span>
+          )}
+          {provider.risk && (
+            <Warning
+              size={12}
+              weight="fill"
+              title={t.oauthRisk}
+              className="shrink-0 text-amber-400/80"
+            />
           )}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-mono">

@@ -28,6 +28,19 @@ def with_memory(system: str, records: list[MemoryRecord]) -> str:
     return f"{system}\n\n{block}" if block else system
 
 
+def with_plan(system: str, plan: str) -> str:
+    """Fold the previous turn's log-driven plan into the system prompt.
+
+    This is what makes planning *drive* the next action instead of being a discarded
+    side-note: the plan the model produced from the last turn's logs steers this turn's
+    ``act`` call. Returns ``system`` unchanged when there is no plan yet.
+    """
+    plan = plan.strip()
+    if not plan:
+        return system
+    return f"{system}\n\nYour plan from the last turn's logs (execute the next step of it):\n{plan}"
+
+
 def build_system_prompt(config: RunConfig, tools: list[dict[str, Any]]) -> str:
     authorized = ", ".join(sorted(config.authorized_targets)) or "(localhost only)"
     tool_lines = "\n".join(f"- {t['name']}: {t['description']}" for t in tools)

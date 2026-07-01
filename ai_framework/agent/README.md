@@ -10,11 +10,18 @@ contains the **log-driven next-step planner** the brief asks for.
   action, invoke a [`tool`](../tools/README.md), observe the result, repeat until done or a
   step budget is reached.
 - **Log-driven planning** — after each step, take *that step's pentest logs* as input and
-  **automatically generate the next execution plan**. The plan is derived from evidence,
-  not a fixed playbook, which is what makes the run adaptive.
-- **Persist as it goes** — write findings to [`memory`](../memory/README.md) and
-  [`notes`](../notes/README.md); trigger [`research`](../research/README.md) when the
-  knowledge base doesn't cover what was observed.
+  **automatically generate the next execution plan** (`backend.plan`). The plan is then fed
+  **back into the next `act` call** (`system.with_plan`) so it actually steers the next
+  action — derived from evidence, not a fixed playbook, which is what makes the run adaptive.
+- **Break bad loops** — `guardrails.py` (a hermes-style, side-effect-free controller) blocks
+  calls that keep failing and halts a run that stops making progress, holding *mutating*
+  tools to a tighter leash than idempotent recon.
+- **OPSEC pacing** — `opsec.py` spaces network actions with a minimum interval + jitter so
+  the cadence the system prompt warns about ("a perfectly regular beacon") isn't emitted.
+- **Persist as it goes** — write facts/attempts to [`memory`](../memory/README.md), findings
+  to [`notes`](../notes/README.md), and checkpoint the whole run to disk (`run_store.py`) so
+  it survives a restart and can be replayed; trigger [`research`](../research/README.md) when
+  the knowledge base doesn't cover what was observed.
 - **Stay inspectable** — every step (thought, action, observation, next plan) is recorded
   so the Agent Console can stream it and a human can intervene.
 
@@ -37,5 +44,7 @@ contains the **log-driven next-step planner** the brief asks for.
 NousResearch / **hermes-agent** — the agentic loop and its tool-calling style.
 
 **Status:** implemented (offline + Claude backends). The Hermes turn protocol, loop, and
-log-driven planner live in `loop.py` / `contracts.py` / `system.py`. See
+log-driven planner live in `loop.py` / `contracts.py` / `system.py`; the loop-breaker,
+OPSEC pacer, and durable run store are `guardrails.py` / `opsec.py` / `run_store.py` (all
+opt-in collaborators of `run_loop`). See
 [`docs/HERMES_INTEGRATION_STEPS.md`](../../docs/HERMES_INTEGRATION_STEPS.md).

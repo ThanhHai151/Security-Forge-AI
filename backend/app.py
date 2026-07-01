@@ -11,8 +11,12 @@ Two ways to run:
 
 API routes (with or without the ``/api`` prefix):
     POST /runs                 body: {goal, target, backend?, model?, step_budget?,
-                                      authorized_targets?}  -> 201 {"id": ...}
+                                      authorized_targets?, opsec_min_interval?, opsec_jitter?}
+                                      -> 201 {"id": ...}
+    GET  /runs                 -> 200 {"runs": [summaries]}    (persisted run history)
     GET  /runs/{id}            -> 200 <Run JSON> | 404   (outcome=="incomplete" => running)
+    GET  /runs/{id}/report?format=md|json -> 200 report | 404  (findings as pentest report)
+    GET  /findings?target=...  -> 200 {total, by_severity, targets, recent}
     GET    /provider-types     -> 200 [catalog presets: id,label,category,base_url,auth,...]
     GET    /accounts           -> 200 {policy, accounts:[masked + health]}
     POST   /accounts           -> 201 {account}            body: {label, base_url, api_key, ...}
@@ -21,7 +25,11 @@ API routes (with or without the ``/api`` prefix):
     GET    /accounts/{id}/models -> 200 {models:[...]}
     POST   /accounts/{id}/test -> 200 {ok, status, error?} | 404   (live probe, stored key)
     POST   /probe-models       -> 200 {models:[...]}       body: {base_url, api_key?}
-    POST   /test-connection    -> 200 {ok, status, error?} body: {base_url, api_key?, model?}
+    POST   /test-connection    -> 200 {ok,status,error?} body: {base_url,api_key?,model?,api_style?}
+    GET    /oauth/providers    -> 200 {id: {flow, supported, reason}}   (sign-in flow metadata)
+    POST   /oauth/start        -> 200 <device|pkce session> | 400       body: {provider}
+    POST   /oauth/poll         -> 200 {status:pending} | {status:done, account}  body: {session_id}
+    POST   /oauth/complete     -> 201 {status:done, account} | 400      body: {session_id, code}
     POST   /router/policy      -> 200 {policy} | 400       body: {policy}
     GET    /memory?target=...  -> 200 {total, by_kind, targets, recent}
     GET    /kb?locale=         -> 200 {total, categories}        (knowledge base list)
@@ -48,6 +56,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from ai_framework.agent.contracts import RunConfig
 from ai_framework.router.accounts import Account
+from ai_framework.router.oauth import PROVIDERS as OAUTH_PROVIDERS
+from ai_framework.router.oauth import OAuthError, OAuthManager
 from ai_framework.router.router import health_snapshot
 from backend.providers import PROVIDER_TYPES, check_endpoint, probe_models
 from backend.service import RunService
@@ -73,10 +83,22 @@ def _strip_api_prefix(path: str) -> str:
     return path
 
 
+def _provider_label(kind: str) -> str:
+    """Human label for a provider id (falls back to the id itself)."""
+    return next((p["label"] for p in PROVIDER_TYPES if p["id"] == kind), kind)
+
+
 def make_handler(
     service: RunService, static_root: Path | None = None
 ) -> type[BaseHTTPRequestHandler]:
     root = static_root.resolve() if static_root else None
+    # One OAuth manager per server so pending sign-in sessions survive across requests.
+    oauth = OAuthManager()
+
+    def _create_oauth_account(fields: dict[str, Any], label: str) -> dict[str, Any]:
+        account = Account(label=label or _provider_label(fields.get("kind", "")), **fields)
+        service.accounts.add(account)
+        return account.masked()
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, payload: Any) -> None:
@@ -116,7 +138,10 @@ def make_handler(
                 return self._send(
                     200,
                     check_endpoint(
-                        b.get("base_url", ""), b.get("api_key", ""), b.get("model", "")
+                        b.get("base_url", ""),
+                        b.get("api_key", ""),
+                        b.get("model", ""),
+                        api_style=b.get("api_style", "openai"),
                     ),
                 )
             if path.startswith("/accounts/") and path.endswith("/test"):
@@ -125,7 +150,36 @@ def make_handler(
                 acct = service.accounts.get(aid)
                 if not acct:
                     return self._send(404, {"error": "unknown account"})
-                return self._send(200, check_endpoint(acct.base_url, acct.api_key, acct.model))
+                return self._send(
+                    200,
+                    check_endpoint(
+                        acct.base_url, acct.api_key, acct.model, api_style=acct.api_style
+                    ),
+                )
+            # ── OAuth sign-in flows ──
+            if path == "/oauth/start":
+                try:
+                    return self._send(200, oauth.start(self._body().get("provider", "")))
+                except OAuthError as exc:
+                    return self._send(400, {"error": str(exc)})
+            if path == "/oauth/poll":
+                b = self._body()
+                try:
+                    result = oauth.poll(b.get("session_id", ""))
+                except OAuthError as exc:
+                    return self._send(400, {"error": str(exc)})
+                if result.get("status") == "done":
+                    masked = _create_oauth_account(result["account"], b.get("label", ""))
+                    result = {"status": "done", "account": masked}
+                return self._send(200, result)
+            if path == "/oauth/complete":
+                b = self._body()
+                try:
+                    result = oauth.complete(b.get("session_id", ""), b.get("code", ""))
+                except OAuthError as exc:
+                    return self._send(400, {"error": str(exc)})
+                masked = _create_oauth_account(result["account"], b.get("label", ""))
+                return self._send(201, {"status": "done", "account": masked})
             if path == "/router/policy":
                 try:
                     policy = service.accounts.set_policy(self._body()["policy"])
@@ -166,6 +220,12 @@ def make_handler(
             path = _strip_api_prefix(parsed.path)
             if path == "/provider-types":
                 return self._send(200, PROVIDER_TYPES)
+            if path == "/oauth/providers":
+                return self._send(200, {
+                    pid: {"flow": p.flow, "supported": p.supported,
+                          "reason": p.unsupported_reason}
+                    for pid, p in OAUTH_PROVIDERS.items()
+                })
             if path == "/accounts":
                 return self._send(200, _router_view(service))
             if path.startswith("/accounts/") and path.endswith("/models"):
@@ -198,6 +258,19 @@ def make_handler(
                 return self._send(200, service.pillars.labs_list())
             if path.startswith("/i18n/"):
                 return self._send(200, service.pillars.i18n(path.removeprefix("/i18n/")))
+            if path == "/runs":
+                return self._send(200, {"runs": service.list_runs()})
+            if path == "/findings":
+                target = (query.get("target") or [""])[0]
+                return self._send(200, service.findings_summary(target))
+            if path.startswith("/runs/") and path.endswith("/report"):
+                rid = path[len("/runs/") : -len("/report")]
+                fmt = (query.get("format") or ["md"])[0]
+                report = service.run_report(rid, fmt)
+                if report is None:
+                    return self._send(404, {"error": "unknown run id"})
+                payload = report if fmt == "json" else {"format": "md", "report": report}
+                return self._send(200, payload)
             if path.startswith("/runs/"):
                 run = service.get_run(path.removeprefix("/runs/"))
                 if not run:

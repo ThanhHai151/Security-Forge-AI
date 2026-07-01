@@ -4,8 +4,9 @@ This is the native equivalent of an external multi-provider proxy: for each mode
 walks the eligible accounts (ordered by the store's rotation policy), tries one, and on a
 rate-limit/auth/ban response (429/401/403) puts that account on a timed cooldown and falls
 through to the next. Per-account health is kept in a process-wide table so a banned key stays
-parked across runs and the Router page can show it. Every account speaks the OpenAI chat shape,
-so each attempt is just an :class:`OpenAICompatBackend` pinned to that account's key+model.
+parked across runs and the Router page can show it. Each attempt uses the wire adapter matching
+the account's ``api_style`` (:class:`OpenAICompatBackend` or :class:`AnthropicCompatBackend`),
+pinned to that account's key+model; OAuth accounts have their token refreshed in place first.
 """
 
 from __future__ import annotations
@@ -16,9 +17,14 @@ from collections.abc import Callable
 from typing import Any
 
 from ai_framework.agent.contracts import RunConfig, Turn
+from ai_framework.models.anthropic_compat import AnthropicCompatBackend
 from ai_framework.models.base import ActResponse
 from ai_framework.models.openai_compat import HttpError, OpenAICompatBackend, TransportError
-from ai_framework.router.accounts import TIERS, AccountStore
+from ai_framework.router.accounts import TIERS, Account, AccountStore
+from ai_framework.router.oauth import OAuthError, OAuthManager
+
+# Refresh an OAuth token this many seconds before it actually expires (clock skew + request time).
+_REFRESH_LEAD = 120.0
 
 # Cooldown seconds per failure class. Auth/forbidden (likely a banned or wrong key) parks the
 # account far longer than a transient rate-limit.
@@ -71,9 +77,49 @@ def _cooldown_for(status: int) -> int:
 class RouterBackend:
     name = "router"
 
-    def __init__(self, store: AccountStore, http_post: Any | None = None) -> None:
+    def __init__(
+        self,
+        store: AccountStore,
+        http_post: Any | None = None,
+        oauth: OAuthManager | None = None,
+    ) -> None:
         self._store = store
         self._http_post = http_post  # injectable for tests
+        self._oauth = oauth or OAuthManager()
+
+    def _fresh_key(self, acct: Account) -> str:
+        """Refresh an OAuth account's access token in place if it is at/near expiry."""
+        if not acct.oauth_provider or not acct.refresh_token:
+            return acct.api_key
+        if acct.token_expiry and _now() < acct.token_expiry - _REFRESH_LEAD:
+            return acct.api_key
+        try:
+            tokens = self._oauth.refresh(acct.oauth_provider, acct.refresh_token)
+        except OAuthError:
+            return acct.api_key  # let the upstream 401 drive the normal cooldown path
+        self._store.update(acct.id, tokens)
+        return tokens.get("api_key", acct.api_key)
+
+    def _backend_for(self, acct: Account, key: str) -> Any:
+        """Pick the wire adapter matching the account's ``api_style``."""
+        if acct.api_style == "anthropic":
+            return AnthropicCompatBackend(
+                base_url=acct.base_url,
+                model=acct.model or "claude-sonnet-4-6",
+                api_key=key or None,
+                name=acct.id,
+                http_post=self._http_post,
+                extra_headers=acct.extra_headers or None,
+                oauth=bool(acct.oauth_provider),
+            )
+        return OpenAICompatBackend(
+            base_url=acct.base_url,
+            model=acct.model or "gpt-4o-mini",
+            api_key=key or None,
+            name=acct.id,
+            http_post=self._http_post,
+            extra_headers=acct.extra_headers or None,
+        )
 
     def _candidates(self):
         accounts = [a for a in self._store.list_accounts() if a.enabled]
@@ -96,13 +142,8 @@ class RouterBackend:
             )
         errors: list[str] = []
         for acct in candidates:
-            backend = OpenAICompatBackend(
-                base_url=acct.base_url,
-                model=acct.model or "gpt-4o-mini",
-                api_key=acct.api_key or None,
-                name=acct.id,
-                http_post=self._http_post,
-            )
+            key = self._fresh_key(acct)
+            backend = self._backend_for(acct, key)
             try:
                 result = invoke(backend)
                 _record(acct.id, ok=True, status=200)

@@ -10,8 +10,9 @@ __pycache__/
 # Secrets / local config
 .env
 
-# Agent runtime state (memory store, transcripts)
+# Agent runtime state (memory store, findings, run transcripts)
 *.jsonl
+runs_store/
 
 # Tooling state
 .serena/

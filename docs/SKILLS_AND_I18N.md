@@ -8,6 +8,9 @@
 >   → the [agentskills.io](https://agentskills.io) `SKILL.md` standard (progressive disclosure).
 > - **[hackingtool](https://github.com/Z4nzu/hackingtool)** → an executable tool-runner taxonomy
 >   (categories + `TITLE/DESCRIPTION/INSTALL/RUN/SUPPORTED_OS`).
+>
+> The concrete plan for folding both of these (plus **Claude-BugHunter**'s engagement
+> methodology) into SecForge's pillars lives in [`EXTERNAL_TOOLKITS.md`](EXTERNAL_TOOLKITS.md).
 
 ---
 
