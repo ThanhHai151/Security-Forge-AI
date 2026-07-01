@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets / local config
+.env
+
+# Agent runtime state (memory store, transcripts)
+*.jsonl
+
+# Tooling state
+.serena/
+ai_accounts.json
+memory_store.jsonl
+
+.claude/

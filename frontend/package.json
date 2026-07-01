@@ -1,0 +1,34 @@
+{
+  "name": "secforge-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SecForge Knowledge Base viewer — a Notion-like reader for the vulnerability dictionary.",
+  "browserslist": [
+    "last 2 chrome versions",
+    "last 2 firefox versions",
+    "last 2 safari versions"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "dev:backend": "cd .. && python -m backend.app",
+    "dev:all": "concurrently -n web,api -c cyan,magenta \"npm:dev\" \"npm:dev:backend\"",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.7",
+    "highlight.js": "^11.9.0",
+    "marked": "^12.0.2",
+    "marked-highlight": "^2.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.3",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.0"
+  }
+}

@@ -1,0 +1,370 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Zinc → dark navy-ink (LyteNyte palette, shared with sgu_lookup_tool) ── */
+  --color-zinc-50:  #EEF4FF;
+  --color-zinc-100: #D8E4F8;
+  --color-zinc-200: #B0C0E0;
+  --color-zinc-300: #8898C0;
+  --color-zinc-400: #5870A0;
+  --color-zinc-500: #3C5070;
+  --color-zinc-600: #283448;
+  --color-zinc-700: #1C2438;
+  --color-zinc-800: #121A28;
+  --color-zinc-900: #0C1220;
+  --color-zinc-950: #070C18;
+
+  /* ── Emerald → neon teal (#22B890 family) ── */
+  --color-emerald-300: #6EE8C2;
+  --color-emerald-400: #40D4A8;
+  --color-emerald-500: #22B890;
+  --color-emerald-600: #129470;
+
+  /* Status hues (separate from the teal accent) */
+  --color-amber-400: #F5B547;
+  --color-red-400:   #F87171;
+  --color-red-500:   #EF4444;
+
+  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  html { scroll-behavior: smooth; }
+}
+
+body {
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  background: #060B16;
+  color: #D8E4F8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Teal glow rising from the bottom — the signature SGU look. Fixed + subtle so it
+   sits behind a long, scrollable document without ever overpowering the text. */
+body::before {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180%;
+  height: 70vh;
+  background: radial-gradient(
+    ellipse at 50% 100%,
+    rgba(34,184,144,0.34) 0%,
+    rgba(34,184,144,0.16) 28%,
+    rgba(34,184,144,0.05) 55%,
+    transparent 78%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #283448; }
+::-webkit-scrollbar-thumb:hover { background: #3C5070; }
+
+/* ── Animations ── */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #121A28 25%, #1C2438 50%, #121A28 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.page-enter { animation: fadeIn 0.18s ease-out; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.drawer-enter { animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── List/nav row: inset left teal accent on hover (LyteNyte effect) ── */
+.nav-row { transition: background 150ms ease, box-shadow 150ms ease, color 150ms ease; }
+.nav-row:hover {
+  background: rgba(34, 184, 144, 0.05);
+  box-shadow: inset 2px 0 0 rgba(64, 212, 168, 0.55);
+}
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid rgba(64, 212, 168, 0.6);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Rendered-markdown ("prose") — the readable document body.
+   Calm measure, clear hierarchy, teal accents used sparingly.
+   ───────────────────────────────────────────────────────────────────────── */
+.prose {
+  color: #C4D2EC;
+  font-size: 15.5px;
+  line-height: 1.72;
+  max-width: 74ch;
+}
+.prose > * + * { margin-top: 1.05em; }
+
+.prose h2 {
+  scroll-margin-top: 96px;
+  margin-top: 2.4em;
+  padding-bottom: 0.45em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  color: #EEF4FF;
+  font-size: 1.32rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.prose h2::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  transform: translateY(-0.18em);
+  background: #22B890;
+  box-shadow: 0 0 8px rgba(34, 184, 144, 0.8);
+}
+.prose h3 {
+  scroll-margin-top: 96px;
+  margin-top: 1.8em;
+  color: #D8E4F8;
+  font-size: 1.06rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.prose p { color: #B8C7E4; }
+.prose strong { color: #EAF1FF; font-weight: 600; }
+.prose em { color: #C4D2EC; }
+
+.prose a, .prose .ext-link {
+  color: #40D4A8;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(64, 212, 168, 0.35);
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.prose a:hover, .prose .ext-link:hover {
+  color: #6EE8C2;
+  border-bottom-color: rgba(110, 232, 194, 0.8);
+}
+.prose .ext-link::after {
+  content: '↗';
+  font-size: 0.78em;
+  margin-left: 0.18em;
+  opacity: 0.65;
+}
+/* Relative repo references can't navigate in the viewer — render as quiet tags */
+.prose .rel-ref {
+  color: #8898C0;
+  border-bottom: 1px dotted rgba(136, 152, 192, 0.45);
+  cursor: help;
+}
+
+.prose ul, .prose ol { padding-left: 1.35rem; }
+.prose li { margin-top: 0.4em; color: #B8C7E4; }
+.prose ul > li::marker { color: #40D4A8; }
+.prose ol > li::marker { color: #5870A0; font-variant-numeric: tabular-nums; }
+
+.prose blockquote {
+  border-left: 2px solid #22B890;
+  background: rgba(34, 184, 144, 0.05);
+  padding: 0.65rem 1rem;
+  color: #A9BAD8;
+}
+.prose blockquote p { color: #A9BAD8; }
+
+/* Inline code — payloads, headers, function names */
+.prose :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  color: #6EE8C2;
+  background: rgba(34, 184, 144, 0.09);
+  border: 1px solid rgba(34, 184, 144, 0.16);
+  padding: 0.1em 0.4em;
+  white-space: nowrap;
+}
+
+/* Fenced code blocks */
+.prose pre {
+  overflow-x: auto;
+  background: #0A1020;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 2px solid #129470;
+  padding: 1rem 1.1rem;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.prose pre code {
+  font-family: var(--font-mono);
+  background: none;
+  border: none;
+  padding: 0;
+  color: #D8E4F8;
+  white-space: pre;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin: 2em 0;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  display: block;
+  overflow-x: auto;
+}
+.prose th, .prose td {
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.prose th {
+  color: #8898C0;
+  text-transform: uppercase;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+/* ── highlight.js theme — navy-ink + teal, matched to the palette above ── */
+.hljs { color: #D8E4F8; background: transparent; }
+.hljs-comment, .hljs-quote { color: #5870A0; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-name, .hljs-tag, .hljs-built_in,
+.hljs-symbol, .hljs-bullet, .hljs-subst { color: #40D4A8; }
+.hljs-string, .hljs-attr, .hljs-template-tag, .hljs-addition, .hljs-meta-string { color: #6EE8C2; }
+.hljs-number, .hljs-literal, .hljs-variable, .hljs-meta, .hljs-link, .hljs-type { color: #8898C0; }
+.hljs-title, .hljs-section, .hljs-attribute, .hljs-selector-id, .hljs-selector-class { color: #B0C0E0; }
+.hljs-deletion { color: #F87171; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LIGHT THEME  ·  toggled via `html.light` (TopNav button; bootstrapped in
+   index.html to avoid a flash). The components use the zinc ramp *semantically*
+   — low index = bright text, high index = dark surface — so REVERSING the ramp
+   turns dark surfaces light and bright text dark with no per-component edits.
+   The teal accent is darkened a touch so it stays legible on light surfaces.
+   --color-white is flipped to navy so the white/[0.0x] hairline borders that
+   define the layout remain visible on a light background.
+   ───────────────────────────────────────────────────────────────────────── */
+html.light {
+  --color-zinc-50:  #0C1220;
+  --color-zinc-100: #121A28;
+  --color-zinc-200: #1C2438;
+  --color-zinc-300: #283448;
+  --color-zinc-400: #45587C;
+  --color-zinc-500: #687CA4;
+  --color-zinc-600: #8E9EC2;
+  --color-zinc-700: #B4C2E0;
+  --color-zinc-800: #D2DEF4;
+  --color-zinc-900: #E4ECFA;
+  --color-zinc-950: #F1F5FE;
+
+  --color-emerald-300: #14A37C;
+  --color-emerald-400: #0F9A72;
+  --color-emerald-500: #0C8A66;
+  --color-emerald-600: #0A7355;
+
+  --color-white: #0C1220;
+}
+
+html.light body {
+  background: #FFFFFF;
+  color: #1C2438;
+}
+/* Softer teal halo — a bright surface needs far less glow than the dark one. */
+html.light body::before {
+  background: radial-gradient(
+    ellipse at 50% 100%,
+    rgba(34,184,144,0.20) 0%,
+    rgba(34,184,144,0.09) 28%,
+    rgba(34,184,144,0.03) 55%,
+    transparent 78%
+  );
+}
+html.light ::-webkit-scrollbar-thumb { background: #C2CFE6; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #A6B6D6; }
+html.light .skeleton {
+  background: linear-gradient(90deg, #E4ECFA 25%, #D2DEF4 50%, #E4ECFA 75%);
+  background-size: 200% 100%;
+}
+
+/* ── Rendered markdown ("prose") on a light surface ── */
+html.light .prose { color: #2E3A56; }
+html.light .prose h2 { color: #0C1220; border-bottom-color: rgba(12,18,32,0.10); }
+html.light .prose h3 { color: #1C2438; }
+html.light .prose p,
+html.light .prose li { color: #2E3A56; }
+html.light .prose strong { color: #0C1220; }
+html.light .prose em { color: #3C4A66; }
+html.light .prose blockquote,
+html.light .prose blockquote p { color: #3A4866; background: rgba(34,184,144,0.07); }
+html.light .prose a,
+html.light .prose .ext-link { color: #0C8A66; border-bottom-color: rgba(12,138,102,0.4); }
+html.light .prose a:hover,
+html.light .prose .ext-link:hover { color: #0A7355; border-bottom-color: rgba(10,115,85,0.8); }
+html.light .prose .rel-ref { color: #687CA4; border-bottom-color: rgba(104,124,164,0.5); }
+html.light .prose :not(pre) > code {
+  color: #0A7355;
+  background: rgba(34,184,144,0.10);
+  border-color: rgba(34,184,144,0.28);
+}
+html.light .prose pre {
+  background: #F4F7FD;
+  border-color: rgba(12,18,32,0.10);
+  border-left-color: #0C8A66;
+}
+html.light .prose pre code { color: #1C2438; }
+html.light .prose th { color: #687CA4; }
+html.light .prose th,
+html.light .prose td { border-bottom-color: rgba(12,18,32,0.08); }
+html.light .prose hr { border-top-color: rgba(12,18,32,0.10); }
+
+/* ── highlight.js on light ── */
+html.light .hljs { color: #1C2438; }
+html.light .hljs-comment, html.light .hljs-quote { color: #687CA4; }
+html.light .hljs-keyword, html.light .hljs-selector-tag, html.light .hljs-name, html.light .hljs-tag,
+html.light .hljs-built_in, html.light .hljs-symbol, html.light .hljs-bullet, html.light .hljs-subst { color: #0C8A66; }
+html.light .hljs-string, html.light .hljs-attr, html.light .hljs-template-tag, html.light .hljs-addition,
+html.light .hljs-meta-string { color: #0A7355; }
+html.light .hljs-number, html.light .hljs-literal, html.light .hljs-variable, html.light .hljs-meta,
+html.light .hljs-link, html.light .hljs-type { color: #5870A0; }
+html.light .hljs-title, html.light .hljs-section, html.light .hljs-attribute, html.light .hljs-selector-id,
+html.light .hljs-selector-class { color: #3C5070; }
+html.light .hljs-deletion { color: #C0392B; }

@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secforge"
+version = "0.0.1"
+description = "Local security-research platform: Hermes-style agent loop, memory, and pluggable LLM backends."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+]
+
+[project.scripts]
+# The single command the installers put on PATH. `secforge` -> interactive menu.
+secforge = "backend.launcher:main"
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+# Local, more-accurate token counting for Headroom (optional; heuristic used otherwise).
+headroom = ["tiktoken>=0.7"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[tool.setuptools.packages.find]
+include = [
+    "ai_framework*", "backend*", "knowledge_base*", "vuln_search*",
+    "defense*", "labs*", "i18n*",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
