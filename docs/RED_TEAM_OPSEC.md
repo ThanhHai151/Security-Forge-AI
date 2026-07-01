@@ -567,8 +567,11 @@ the #2 initial-access vector, driven by infostealers.)
 
 - **macOS:** the guardrails are **TCC** (privacy/consent), **Gatekeeper + notarization**, and the
   **`com.apple.quarantine`** attribute on downloaded files; EDR products consume the **Endpoint
-  Security Framework (ESF)**. macOS 15.4 (2025) **added TCC events to ESF**, widening defender
-  visibility into consent abuse. (outflank.nl EDR internals macOS/Linux; mjtsai.com macOS 15.4 TCC/ESF)
+  Security Framework (ESF)**. Concrete 2025 shift: **macOS 15.4 added the first TCC event to ESF —
+  `ES_EVENT_TYPE_NOTIFY_TCC_MODIFY`** (carrying the instigator process, the service, the
+  grant/revoke `update_type`, and the `reason` e.g. user consent vs MDM), so consent grant/revoke is
+  finally *natively* observable; before 15.4 defenders had only fragile, undocumented TCC-daemon log
+  messages. (objective-see.org blog_0x7F; developer.apple.com ESF; outflank.nl EDR internals macOS/Linux)
 - **Linux:** offense and defense increasingly meet at **eBPF** — the same in-kernel instrumentation
   that powers **Falco** / modern sensors can be abused for stealth; classic tradecraft (`LD_PRELOAD`
   hijack, `memfd_create` fileless execution) is countered by **auditd** and eBPF runtime sensors.
@@ -771,8 +774,10 @@ changed, or which are secondary/uncertain, are flagged inline (§0–§8) and in
 
 **Endpoint depth & delivery — §8**
 - Elastic Security Labs "Detecting In-Memory Threats with Kernel ETW Call Stacks" — https://www.elastic.co/security-labs/doubling-down-etw-callstacks ·
-  Outflank "EDR internals for macOS and Linux" — https://www.outflank.nl/blog/2024/06/03/edr-internals-macos-linux/ ·
-  macOS 15.4 adds TCC events to ESF — https://mjtsai.com/blog/2025/03/28/macos-15-4-adds-tcc-events-to-endpoint-security/
+  Outflank "EDR internals for macOS and Linux" — https://www.outflank.nl/blog/2024/06/03/edr-internals-macos-linux/
+- Objective-See "TCC events in Endpoint Security" (macOS 15.4) — https://objective-see.org/blog/blog_0x7F.html ·
+  Apple ESF `ES_EVENT_TYPE_NOTIFY_TCC_MODIFY` — https://developer.apple.com/documentation/endpointsecurity/es_event_type_notify_tcc_modify ·
+  mjtsai summary — https://mjtsai.com/blog/2025/03/28/macos-15-4-adds-tcc-events-to-endpoint-security/
 - Microsoft "HTML smuggling surges" — https://www.microsoft.com/en-us/security/blog/2021/11/11/html-smuggling-surges-highly-evasive-loader-technique-increasingly-used-in-banking-malware-targeted-attacks/ ·
   MITRE T1553.005 Mark-of-the-Web Bypass — https://attack.mitre.org/techniques/T1553/005/
 - Red Canary C2-framework trends — https://redcanary.com/threat-detection-report/trends/c2-frameworks/ ·

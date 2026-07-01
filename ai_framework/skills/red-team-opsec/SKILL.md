@@ -7,9 +7,11 @@ domain: offensive-security
 subdomain: opsec-tradecraft
 tags: [opsec, stealth, evasion, attribution, pyramid-of-pain, detection, blue-team]
 languages: [en, vi]
+owasp: []
 version: "0.1"
 author: secforge
 license: Apache-2.0
+catalog: ../../../docs/RED_TEAM_OPSEC.md
 deep_dive: ../../../docs/RED_TEAM_OPSEC.md
 ---
 

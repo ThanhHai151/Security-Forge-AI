@@ -7,9 +7,11 @@ domain: offensive-security
 subdomain: cloud-identity-opsec
 tags: [opsec, cloud, identity, entra, oauth, kerberos, active-directory, token-theft, detection]
 languages: [en, vi]
+owasp: []
 version: "0.1"
 author: secforge
 license: Apache-2.0
+catalog: ../../../docs/RED_TEAM_OPSEC.md
 deep_dive: ../../../docs/RED_TEAM_OPSEC.md
 ---
 

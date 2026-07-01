@@ -555,8 +555,11 @@ vector truy cập ban đầu, do infostealer thúc đẩy.)
 
 - **macOS:** các rào chắn là **TCC** (quyền riêng tư/đồng thuận), **Gatekeeper + notarization**, và thuộc tính
   **`com.apple.quarantine`** trên tệp tải về; các sản phẩm EDR tiêu thụ **Endpoint Security Framework (ESF)**.
-  macOS 15.4 (2025) **đã thêm sự kiện TCC vào ESF**, mở rộng khả năng thấy của người phòng thủ về lạm dụng đồng
-  thuận. (outflank.nl EDR internals macOS/Linux; mjtsai.com macOS 15.4 TCC/ESF)
+  Bước ngoặt cụ thể 2025: **macOS 15.4 đã thêm sự kiện TCC đầu tiên vào ESF —
+  `ES_EVENT_TYPE_NOTIFY_TCC_MODIFY`** (mang theo tiến trình instigator, service, `update_type` cấp/thu-hồi, và
+  `reason` — ví dụ đồng thuận người dùng vs MDM), nên việc cấp/thu-hồi consent nay quan sát được *nguyên bản*;
+  trước 15.4 người phòng thủ chỉ có các thông điệp log riêng, mong manh của TCC daemon.
+  (objective-see.org blog_0x7F; developer.apple.com ESF; outflank.nl EDR internals macOS/Linux)
 - **Linux:** tấn công và phòng thủ ngày càng gặp nhau ở **eBPF** — chính công cụ đo đạc trong-kernel cấp sức mạnh
   cho **Falco** / các sensor hiện đại cũng có thể bị lạm dụng để ẩn mình; tradecraft cổ điển (chiếm `LD_PRELOAD`,
   thực thi không-tệp `memfd_create`) bị đối phó bởi **auditd** và các sensor runtime eBPF.
@@ -758,8 +761,10 @@ chứng bên dưới.
 
 **Chiều sâu endpoint & phát tán — §8**
 - Elastic Security Labs "Detecting In-Memory Threats with Kernel ETW Call Stacks" — https://www.elastic.co/security-labs/doubling-down-etw-callstacks ·
-  Outflank "EDR internals for macOS and Linux" — https://www.outflank.nl/blog/2024/06/03/edr-internals-macos-linux/ ·
-  macOS 15.4 thêm sự kiện TCC vào ESF — https://mjtsai.com/blog/2025/03/28/macos-15-4-adds-tcc-events-to-endpoint-security/
+  Outflank "EDR internals for macOS and Linux" — https://www.outflank.nl/blog/2024/06/03/edr-internals-macos-linux/
+- Objective-See "TCC events in Endpoint Security" (macOS 15.4) — https://objective-see.org/blog/blog_0x7F.html ·
+  Apple ESF `ES_EVENT_TYPE_NOTIFY_TCC_MODIFY` — https://developer.apple.com/documentation/endpointsecurity/es_event_type_notify_tcc_modify ·
+  tóm tắt mjtsai — https://mjtsai.com/blog/2025/03/28/macos-15-4-adds-tcc-events-to-endpoint-security/
 - Microsoft "HTML smuggling surges" — https://www.microsoft.com/en-us/security/blog/2021/11/11/html-smuggling-surges-highly-evasive-loader-technique-increasingly-used-in-banking-malware-targeted-attacks/ ·
   MITRE T1553.005 Mark-of-the-Web Bypass — https://attack.mitre.org/techniques/T1553/005/
 - Xu hướng C2-framework của Red Canary — https://redcanary.com/threat-detection-report/trends/c2-frameworks/ ·
