@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # SecForge installer — Linux, macOS, WSL2, Termux.
 #
-#   curl -fsSL https://<myrepogithub>/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/ThanhHai151/Security-Forge-AI/main/install.sh | bash
 #
 # Clones SecForge, sets up an isolated Python venv, builds the Web UI (if Node is
 # available), and puts a `secforge` command on your PATH. Re-running updates in place.
 #
 # Override anything via env vars, e.g.:
-#   SECFORGE_REPO=https://github.com/you/secforge.git SECFORGE_BRANCH=main bash install.sh
+#   SECFORGE_REPO=https://github.com/ThanhHai151/Security-Forge-AI.git SECFORGE_BRANCH=main bash install.sh
 set -euo pipefail
 
 # ── Config (override via env) ────────────────────────────────────────────────
-REPO_URL="${SECFORGE_REPO:-https://github.com/<myrepogithub>/secforge.git}"
+REPO_URL="${SECFORGE_REPO:-https://github.com/ThanhHai151/Security-Forge-AI.git}"
 BRANCH="${SECFORGE_BRANCH:-main}"
 INSTALL_DIR="${SECFORGE_HOME:-$HOME/.secforge}"
 

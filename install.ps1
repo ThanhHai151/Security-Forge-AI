@@ -7,17 +7,17 @@
   present), and puts a `secforge` command on your PATH. Re-running updates in place.
 
   One-liner:
-      iex (irm https://<myrepogithub>/install.ps1)
+      iex (irm https://raw.githubusercontent.com/ThanhHai151/Security-Forge-AI/main/install.ps1)
 
   Override defaults with env vars before running:
-      $env:SECFORGE_REPO   = 'https://github.com/you/secforge.git'
+      $env:SECFORGE_REPO   = 'https://github.com/ThanhHai151/Security-Forge-AI.git'
       $env:SECFORGE_BRANCH = 'main'
 #>
 #Requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 
 # ── Config (override via env) ────────────────────────────────────────────────
-$RepoUrl    = if ($env:SECFORGE_REPO)   { $env:SECFORGE_REPO }   else { 'https://github.com/<myrepogithub>/secforge.git' }
+$RepoUrl    = if ($env:SECFORGE_REPO)   { $env:SECFORGE_REPO }   else { 'https://github.com/ThanhHai151/Security-Forge-AI.git' }
 $Branch     = if ($env:SECFORGE_BRANCH) { $env:SECFORGE_BRANCH } else { 'main' }
 $InstallDir = if ($env:SECFORGE_HOME)   { $env:SECFORGE_HOME }   else { Join-Path $env:USERPROFILE '.secforge' }
 $BinDir     = Join-Path $InstallDir 'bin'
