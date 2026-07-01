@@ -93,6 +93,10 @@ class RunConfig(BaseModel):
     # and the offline demo stay instant). Raise it to behave like a cautious operator.
     opsec_min_interval: float = 0.0
     opsec_jitter: float = 0.0
+    # OPSEC transport: route every network tool through this proxy (e.g. "http://127.0.0.1:8080"
+    # for Burp, or a SOCKS-over-HTTP pivot) and/or present a custom User-Agent. Empty = direct.
+    proxy: str | None = None
+    user_agent: str | None = None
 
 
 class Run(BaseModel):

@@ -7,9 +7,9 @@ localhost or an explicitly authorized target. ``note_finding`` is pure and alway
 from __future__ import annotations
 
 from typing import Any
-from urllib.request import urlopen
 
 from ai_framework.tools.base import ToolContext, require_authorized
+from ai_framework.tools.session import session_of
 
 
 class HttpGetTool:
@@ -29,7 +29,7 @@ class HttpGetTool:
     def run(self, args: dict[str, Any], ctx: ToolContext) -> str:
         url = args["url"]
         require_authorized(url, ctx)
-        with urlopen(url, timeout=10) as resp:  # noqa: S310 - host is gated above
+        with session_of(ctx).open(url, 10) as resp:  # session: persistent cookies/proxy/UA
             body = resp.read(4096).decode("utf-8", "replace")
             return f"HTTP {resp.status} {url}\n{body}"
 
@@ -62,6 +62,19 @@ class NoteFindingTool:
                 },
                 "kb_ref": {"type": "string", "description": "Related knowledge-base note id."},
                 "tags": {"type": "array", "items": {"type": "string"}},
+                "repro": {
+                    "type": "object",
+                    "description": (
+                        "Proof: a request to replay + what confirms it, so the finding is "
+                        "auto-verified. {request:{method,url,headers,body}, expect:'marker in "
+                        "response', expect_status:200}. Provide it whenever you can reproduce."
+                    ),
+                    "properties": {
+                        "request": {"type": "object"},
+                        "expect": {"type": "string"},
+                        "expect_status": {"type": "integer"},
+                    },
+                },
             },
             "required": ["title"],
         }
@@ -71,3 +84,49 @@ class NoteFindingTool:
         detail = args.get("detail", "")
         severity = args.get("severity", "info")
         return f"FINDING [{severity}]: {title}\n{detail}".rstrip()
+
+
+class RecordAssetTool:
+    name = "record_asset"
+    description = (
+        "Record discovered attack surface into the recon graph so later steps reason over "
+        "structure, not prose. kind ∈ {endpoint, param, form, tech, host, subdomain, cookie, "
+        "other}. Record one (kind+value) or many via 'assets'. Local and always safe."
+    )
+    touches_network = False
+    mutating = False
+
+    @property
+    def json_schema(self) -> dict[str, Any]:
+        kind: dict[str, Any] = {
+            "type": "string",
+            "enum": ["endpoint", "param", "form", "tech", "host", "subdomain", "cookie", "other"],
+        }
+        item: dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "kind": kind,
+                "value": {"type": "string", "description": "URL / param name / tech / host"},
+                "detail": {"type": "string"},
+            },
+        }
+        return {
+            "type": "object",
+            "properties": {
+                "kind": kind,
+                "value": {"type": "string"},
+                "detail": {"type": "string"},
+                "assets": {"type": "array", "items": item, "description": "Record several at once"},
+            },
+        }
+
+    def run(self, args: dict[str, Any], ctx: ToolContext) -> str:
+        rows = args.get("assets")
+        if not isinstance(rows, list):
+            rows = [args]
+        recorded = [
+            f"{r.get('kind', 'other')}:{r.get('value', '')}" for r in rows if r.get("value")
+        ]
+        if not recorded:
+            return "no asset recorded (provide kind + value, or an 'assets' list)"
+        return "recorded assets: " + ", ".join(recorded)

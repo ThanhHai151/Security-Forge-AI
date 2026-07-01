@@ -37,10 +37,23 @@ logged, and reasoned about.
 Z4nzu / **hackingtool** — a menu/catalog of security tools organized by category.
 
 Every network tool declares two flags the loop reads: `touches_network` (so `opsec.py` paces
-it) and `mutating` (so `guardrails.py` gives state-changing calls a tighter leash). All network
-tools pass through `base.require_authorized` — the single scope choke point.
+it) and `mutating` (so `guardrails.py` gives state-changing calls a tighter leash — a tool may
+also decide this **per-call** via `is_mutating_call`, e.g. `run_recon` is passive for `httpx`
+but intrusive for `nuclei`). All network tools pass through `base.require_authorized` /
+`require_authorized_host` — the single scope choke point — and share one per-run `HttpSession`
+(`session.py`: persistent cookies + proxy + User-Agent) via `ToolContext`.
 
-**Status:** implemented — `base.py` (`Tool`, `ToolRegistry`, `require_authorized` gate),
-`builtin.py` (`http_get`, `note_finding` with severity/evidence), and `security.py` (recon &
-transform catalog: `http_request`, `inspect_headers`, `fetch_robots_sitemap`, `decode_encode`).
-Add more tools by dropping a class in `security.py` and registering it in `default_registry`.
+**Status:** implemented.
+
+| File | Tools |
+|------|-------|
+| `builtin.py` | `http_get`, `note_finding` (severity/evidence + optional `repro` for auto-verification), `record_asset` (recon graph) |
+| `security.py` | `http_request`, `inspect_headers`, `fetch_robots_sitemap`, `decode_encode` |
+| `auth.py` | `login` (form login + CSRF auto-extract), `set_auth` (bearer/header/cookie) |
+| `jwt.py` | `jwt_attack` (decode · alg-none · crack-hs256 · forge-hs256 · verify-hs256) |
+| `external.py` | `run_recon` — scope-gated allow-list of external CLIs (httpx, nuclei, ffuf, gobuster, nmap, naabu, subfinder, dnsx, katana, whatweb, wafw00f, nikto, sqlmap); injectable runner, graceful when a binary is absent |
+| `browser.py` | `browser_render` — optional headless-browser DOM render (Playwright extra) for DOM XSS / SPA content |
+
+Add more tools by dropping a class in the relevant file and registering it in
+`backend/service.py:default_registry`. Injectable collaborators on `ToolContext`
+(`session`/`runner`/`renderer`) keep every tool unit-testable without a network or a binary.

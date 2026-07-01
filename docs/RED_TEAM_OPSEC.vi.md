@@ -1,7 +1,5 @@
 # OPSEC, Ẩn mình & Né tránh cho Red-Team — tài liệu tham chiếu về tradecraft
 
-> **Ngôn ngữ:** [English](RED_TEAM_OPSEC.md) · Tiếng Việt
->
 > **Là gì:** một tài liệu tham chiếu mang tính khái niệm về cách một red team thực thụ giữ
 > bí mật trong một cuộc đánh giá **được ủy quyền** — che giấu nguồn gốc của mình, hòa lẫn vào
 > mạng và máy chủ của mục tiêu, quản lý các tạo tác (artifact) để lại, và tránh tự phơi bày
@@ -13,7 +11,7 @@
 > và trụ cột phòng thủ cần nửa *phát hiện* để gia cố mục tiêu chống lại đúng những nước đi này.
 > Tệp này là nguồn chung cho cả hai.
 >
-> **Phạm vi & an toàn:** đây là các nguyên tắc và phần *lý do* (tradecraft, mã MITRE ATT&CK, các
+> **Phạm vi & an toàn:** đây là các nguyên tắc và phần *lý do* (tradecraft, các ID kỹ thuật MITRE ATT&CK, các
 > tình huống thực tế, phát hiện), **không phải** vũ khí hóa — không có cấu hình cho người vận hành,
 > hồ sơ malleable-C2, mã bypass, hay hướng dẫn thiết lập từng bước. Nó được viết chỉ dành cho công
 > việc được ủy quyền, và cố ý ghép mỗi khái niệm né tránh với cách người phòng thủ nhìn thấy nó.
@@ -106,8 +104,8 @@ khi người phòng thủ chối bỏ chúng:
 | ↓ | Công cụ | Thách thức |
 | Đỉnh | **TTP** (chiến thuật, kỹ thuật, quy trình) | **Khó — không thể dễ dàng từ bỏ phương pháp của mình** |
 
-Bài học cốt lõi, và cách diễn đạt trung thực cho chính các ví dụ của người dùng: **đổi một IP nguồn
-("IP giả") là nước đi rẻ nhất có thể — rẻ cho người vận hành *và* rẻ cho người phòng thủ để đánh bại.**
+Bài học cốt lõi, diễn đạt một cách trung thực: **đổi một IP nguồn ("IP giả") là nước đi rẻ nhất có
+thể — rẻ cho người vận hành *và* rẻ cho người phòng thủ để đánh bại.**
 Cuộc so kè bền vững diễn ra gần *đỉnh* kim tự tháp, tại các dấu vân tay công cụ/hành vi (JA3/JARM, các
 mẫu beaconing) và TTP. Một chiến dịch chỉ xoay vòng IP và giả mạo múi giờ thì chưa thay đổi được điều gì
 thực sự làm tổn thương một người phòng thủ có năng lực.
@@ -115,31 +113,34 @@ thực sự làm tổn thương một người phòng thủ có năng lực.
 *Nguồn: attackiq.com/glossary/pyramid-of-pain-2, activecountermeasures.com "hunt what hurts",
 Bianco (2013).*
 
-### Taxonomy né tránh — MITRE ATT&CK (cú tách tactic của 2025)
+### Taxonomy né tránh — MITRE ATT&CK (cú tách Stealth / Defense-Impairment của v19)
 
-> **Thay đổi framework — ĐÃ XÁC NHẬN, không phải "trôi dạt" (kiểm chứng trạng thái hiện tại tại
-> attack.mitre.org).** Tactic lịch sử **Defense Evasion (TA0005)** đã được **tách thành hai tactic**
-> trong ATT&CK hiện hành (v19):
-> - **TA0005 được đổi tên thành "Stealth"** — các hành vi *che giấu* thuần túy: né tránh, làm rối, hoặc
->   bắt chước hoạt động bình thường để không thể phân biệt với hoạt động lành tính, **mà không** sửa đổi
->   các kiểm soát an ninh.
-> - **TA0112 "Defense Impairment"** (mới) — các kỹ thuật *làm suy yếu, vô hiệu hóa, hoặc can thiệp* các
->   kiểm soát an ninh, pipeline, và công cụ để người phòng thủ mất khả năng quan sát.
+> **Thay đổi framework — ĐÃ XÁC NHẬN với nguồn MITRE gốc (nhưng hãy kiểm lại theo từng kỹ thuật).**
+> Trong **ATT&CK v19** (v19.0 phát hành **2026-04-28**; v19.1 hiện hành) tactic lịch sử **Defense
+> Evasion** đã được **tách thành hai tactic — chỉ trong ma trận Enterprise** (Mobile và ICS vẫn giữ
+> Defense Evasion):
+> - **Stealth — giữ nguyên định danh TA0005** — các hành vi *che giấu* thuần túy: né tránh, làm rối,
+>   hoặc bắt chước hoạt động bình thường để không thể phân biệt với hoạt động lành tính, **mà không**
+>   sửa đổi các kiểm soát an ninh.
+> - **Defense Impairment — định danh mới TA0112** — các kỹ thuật *làm suy yếu, vô hiệu hóa, hoặc can
+>   thiệp* các kiểm soát an ninh, pipeline, và công cụ để người phòng thủ mất khả năng quan sát. (Một
+>   số nhà cung cấp vẫn gọi là "Impair Defenses"; tên tactic của MITRE là "Defense Impairment.")
 >
-> Việc tái tổ chức là có thật: **Impair Defenses (T1562)** cũ và các sub-technique của nó
-> (.001 Disable/Modify Tools, .006 Indicator Blocking) đã được gộp vào **T1685 "Disable or Modify Tools"**
-> mới dưới TA0112; **T1687 "Exploitation for Defense Impairment"** được thêm vào và "Exploitation for
-> Defense Evasion" cũ được đổi tên thành **T1211 "Exploitation for Stealth."** Bất kỳ báo cáo/phát hiện
-> nào vẫn ánh xạ tới "TA0005 = né tránh+làm suy yếu" hoặc tới T1562.001/.006 nay có một điểm mù ở cấp
-> tactic. **Các mỏ neo ổn định là các ID kỹ thuật** (T1070, T1036, T1027, T1218, T1055, T1497…), vốn
-> tồn tại qua lần đổi tên; tài liệu trước 2025 gọi TA0005 là "Defense Evasion" với ~40 kỹ thuật phản
-> ánh phiên bản ≤ v18. Hãy trích dẫn các URL có phiên bản cho taxonomy lịch sử.
+> Hệ quả cho công cụ: bất kỳ phát hiện/báo cáo nào vẫn ánh xạ tới "TA0005 = né tránh + làm suy yếu"
+> nay có một điểm mù ở cấp tactic. **Các mỏ neo ổn định là các ID kỹ thuật** (T1070, T1036, T1027,
+> T1218, T1055, T1497…), vốn tồn tại qua lần đổi tên. **Việc từng sub-technique Defense-Evasion cũ rơi
+> vào Stealth hay Defense Impairment là không đồng nhất — hãy tra tactic của từng kỹ thuật trên
+> attack.mitre.org thay vì suy đoán** (can thiệp log cloud T1562.008 và họ Impair-Defenses là các ứng
+> viên Defense-Impairment tự nhiên). Tài liệu trước 2025 gọi TA0005 là "Defense Evasion" với ~40 kỹ
+> thuật phản ánh phiên bản ≤ v18; hãy trích dẫn URL có phiên bản cho taxonomy lịch sử.
+> *(attack.mitre.org/resources/updates/updates-april-2026 · /tactics/TA0112 · /resources/versions)*
 
 Về mặt khái niệm, các kỹ thuật một người vận hành dùng để ẩn mình vẫn rơi vào các họ dễ nhận biết —
 Masquerading (T1036), Indicator Removal (T1070), nội dung Obfuscated/Encrypted (T1027), System Binary
 Proxy Execution (T1218), Process Injection (T1055), Virtualization/Sandbox Evasion (T1497), và tập
 can-thiệp-kiểm-soát nay đã tách riêng dưới TA0112. Tài liệu này tổ chức chúng thành **năm lớp vận hành
-(§2–§6)** và ánh xạ chúng lại trong bảng ở §8, độc lập với việc gán nhãn tactic của MITRE.
+(§2–§6)**, bổ sung các lớp danh tính/cloud và endpoint/phát tán (§7–§8), và ánh xạ tất cả lại trong bảng
+ở §10, độc lập với việc gán nhãn tactic của MITRE.
 
 ---
 
@@ -256,6 +257,13 @@ những rò rỉ *quy kết* mạnh nhất, và lịch sử đầy rẫy những
   IP đích, tên miền, hay chứng chỉ." Công cụ mặc định có một vân tay ổn định, nên một người vận hành xoay
   vòng IP/tên miền nhưng không bao giờ định hình lại hồ sơ TLS của mình thì vẫn dễ dàng bị gom cụm. Đây là
   lý do né-tránh-chỉ-bằng-IP (§2) là yếu. (Salesforce Engineering "TLS fingerprinting with JA3 and JA3S")
+- **JA4/JA4+ là kế nhiệm hiện hành — và nó vá đúng chỗ né tránh đã phá vỡ JA3.** Khi Chrome (2023) bắt đầu
+  **ngẫu nhiên hóa thứ tự extension TLS**, hash nhạy-thứ-tự của JA3 trở nên bất ổn. **JA4** khắc phục bằng
+  cách băm danh sách extension đã *sắp xếp* (SHA256 cắt ngắn, đã lọc GREASE/SNI) và bổ sung ALPN cùng độ phủ
+  giao thức hiện đại (tiền tố `t`/`q` phân biệt TCP với QUIC) mà JA3 thiếu. **JA4+** là cả một họ — JA4 (TLS
+  client), JA4S (server), JA4H (HTTP), JA4X (chứng chỉ X.509), JA4SSH (SSH), JA4L (độ trễ), JA4T (TCP), JA4D
+  (DHCP) — lấy vân tay *cách* một công cụ hành xử qua nhiều lớp, không chỉ TLS hello. Bài học người vận hành,
+  sắc bén hơn: định hình lại một lớp là chưa đủ. (blog.cloudflare.com/ja4-signals; github.com/FoxIO-LLC/ja4)
 - **Hồ sơ Malleable C2** định hình lại yêu cầu/phản hồi HTTP(S)/DNS của một implant — header, URI, body,
   thậm chí cả handshake — để bắt chước các dịch vụ lành tính (ví dụ trông giống Windows Update / Slack).
   *Mặc định vs tùy chỉnh rất quan trọng:* các hồ sơ đã biết/mặc định vấp phải chữ ký; hồ sơ tùy chỉnh né
@@ -287,6 +295,13 @@ những rò rỉ *quy kết* mạnh nhất, và lịch sử đầy rẫy những
   C2 triển khai đồng nhất, nên ví dụ **80% các C2 Trickbot đang hoạt động chia sẻ một JARM** với zero trùng
   lặp trong top 1M của Alexa. Lưu ý: không phải bằng chứng của ác ý (Burp Collaborator / Java tổng quát có
   thể khớp), và nó có thể bị **giả mạo/ngẫu nhiên hóa**. (Salesforce Engineering JARM)
+- **JA4X ghim được C2 ngay cả khi chứng chỉ bị ngẫu nhiên hóa.** Các bản đồ JA4+ do FoxIO công bố lấy vân
+  tay các implant và C2 cụ thể theo hành vi đa-lớp — **Cobalt Strike, Sliver, IcedID, và Qakbot** đều có chữ
+  ký JA4+ trong danh mục. Đáng chú ý, **~400 dòng mã ngẫu-nhiên-hóa-chứng-chỉ của Sliver vẫn cho ra một JA4X
+  *hằng định***, vì JA4X lấy vân tay *cách* chứng chỉ được tạo ra, không phải nội dung ngẫu nhiên của nó —
+  phát hiện leo lên Kim tự tháp Đau đớn từ tạo tác (chứng chỉ) sang hành vi (cách nó được đúc). Cloudflare cho
+  biết phân tích 15M+ JA4 duy nhất mỗi ngày, cấp dữ liệu cho "JA4 Signals" hành vi. (github.com/FoxIO-LLC/ja4
+  ja4plus-mapping.csv; blog.foxio.io/ja4+-network-fingerprinting)
 - **Phát hiện domain-fronting:** kiểm tra HTTPS xem có **SNI ≠ Host không khớp** không (ATT&CK M1020).
 - **Phát hiện bất thường DNS:** subdomain dài entropy cao, các đợt NXDOMAIN (DGA), beaconing theo định thời
   truy vấn, các đợt tăng loại-bản-ghi hiếm (TXT/NULL), client dùng resolver ngoài / DoH không được phép.
@@ -364,7 +379,7 @@ thành **T1685** và các anh em (xem §1).
 
 ## 6. Quản lý tạo tác & dấu chân ("xóa dấu chân") — và vì sao xóa cục bộ là vô ích
 
-Đây là phần "xóa dấu chân" của người dùng hỏi trực tiếp nhất — và phát hiện trung thực quan trọng nhất là
+Đây là điều mà "xóa dấu chân" nói đến trực tiếp nhất — và phát hiện trung thực quan trọng nhất là
 **đối mặt với telemetry hiện đại, xóa dấu chân cục bộ của bạn hầu như không hiệu quả, và *việc thử* thường
 tạo ra một tín hiệu ồn ào hơn cả dấu chân ban đầu.**
 
@@ -429,7 +444,149 @@ và chuyển tiếp (forward) mọi thứ.
 
 ---
 
-## 7. Mô phỏng theo tình báo mối đe dọa & quy kết
+## 7. Cloud, danh tính & Active Directory — nơi việc ẩn mình dịch lên tầng cao hơn
+
+Năm lớp ở trên giả định một cuộc đánh giá mạng-và-máy-chủ. Các cuộc xâm nhập hiện đại ngày càng diễn ra
+trong **mặt phẳng điều khiển danh tính và cloud**, nơi "ẩn mình" nghĩa là hòa lẫn vào các luồng OAuth, lưu
+lượng token, và lời gọi API thay vì gói tin và tiến trình — và nơi bề mặt phát hiện là *log và lần đăng
+nhập*, không phải Sysmon. (Mandiant M-Trends 2025: thông tin đăng nhập bị đánh cắp lên vị trí #2 trong các
+vector truy cập ban đầu, do infostealer thúc đẩy.)
+
+### 7.1 Né tránh ghi log cloud — Defense Impairment trên cloud (phần *lý do*)
+
+- **Làm mù bộ ghi (ATT&CK T1562.008, Disable or Modify Cloud Logs).** Ba nước đi đã được ghi nhận, tăng dần
+  độ tinh vi:
+  - **Dừng nó** — `cloudtrail:StopLogging` (AWS) hoặc đặt một GCP log sink `disabled=true` mở ngay một khoảng
+    mù khả kiến.
+  - **Làm nó không đọc được** — trỏ lại một CloudTrail trail vào một khóa KMS do kẻ tấn công kiểm soát, rồi
+    thu hồi quyền: log không thể mã hóa nữa nên đơn giản là không được ghi (GCP CMEK rekey thất bại tương tự
+    khi không có quyền giải mã khóa hiện tại).
+  - **Chuyển hướng nó** — gửi output của trail/sink tới một bucket do kẻ tấn công sở hữu, vừa loại nó khỏi tầm
+    nhìn của người phòng thủ *vừa* cấp cho người vận hành khả năng recon liên tục tài khoản nạn nhân.
+  (unit42.paloaltonetworks.com/cloud-logging-defense-evasion; attack.mitre.org/techniques/T1562/008)
+
+### Đối trọng phát hiện
+
+- Chính hành vi can thiệp là một sự kiện: theo dõi `StopLogging` / `UpdateTrail` / `logging.sinks.update`.
+  **Trail cấp tổ chức** mà tài khoản thành viên không thể sửa, các sink **chỉ-ghi-thêm / bất biến**, và luật
+  *GCP Logging Sink Modification* được Elastic duy trì sẽ bắt được nó. Như với log máy chủ (§6), nước đi bền
+  vững là **chuyển tiếp trước, ra khỏi tầm với của người vận hành** — bộ ghi không nằm trên máy. Lưu ý trung
+  thực: "dừng ghi log" **không** hoàn toàn im lặng (CloudTrail hiện lỗi bucket-bị-từ-chối/cấu hình), và "không
+  đọc được vĩnh viễn" phụ thuộc vào việc kẻ tấn công giữ hay xóa khóa KMS.
+
+### 7.2 Danh tính — đánh cắp token & OAuth consent phishing (phần *lý do*)
+
+- **Không cần mã độc (ATT&CK T1528 Steal Application Access Token · T1550.001 Application Access Token · T1566
+  Phishing).** Với Microsoft Entra ID, người vận hành có thể lạm dụng *các client ID first-party hợp pháp* thay
+  vì thả mã:
+  - Một cú **cơ bản** dùng một public client tin cậy (ví dụ client id của **VS Code**) yêu cầu scope Graph
+    `.default` — cho ra một access token ngắn hạn **không** kèm refresh token (`offline_access` + `.default`
+    loại trừ lẫn nhau).
+  - Một biến thể **nâng cao** lạm dụng client id của **Microsoft Authentication Broker** đối với **Device
+    Registration Service** để lấy một refresh token có `offline_access`, rồi đổi nó (qua ROADtools/roadtx) lấy
+    một **Primary Refresh Token (PRT)** — credential đứng sau SSO liền mạch — cho phép người vận hành cưỡi lên
+    trạng thái đăng nhập sẵn có và *tránh bị nhắc lại* MFA / Conditional Access.
+  - **Sắc thái (không phải chú thích nhỏ):** một PRT **không** đánh bại MFA về mặt mật mã — nó **mang theo
+    claim MFA đã được thỏa mãn trong lúc phishing**. Conditional Access yêu cầu *thiết bị tuân thủ /
+    hybrid-joined* vẫn có thể chặn thiết bị mà kẻ tấn công đăng ký. "Bypass MFA" thực chất là "thừa hưởng một
+    MFA đã được thực hiện." (elastic.co/security-labs/entra-id-oauth-phishing-detection; dirkjanm.io PRT phishing)
+
+### Đối trọng phát hiện
+
+- **Entra ID Protection** có phát hiện **"Anomalous token" (offline)** — đặc điểm token bất thường, hoặc token
+  dùng từ một vị trí lạ — kết hợp tín hiệu Entra + Microsoft 365 để bắt *replay*. Trên Windows 10/11, **Defender
+  for Endpoint** đánh dấu **truy cập PRT đáng ngờ** và cấp vào điểm rủi ro Entra điều khiển Conditional Access
+  (lưu lượng thấp, giá trị cao).
+- **Cần *tương quan* log, không phải một lần đăng nhập đơn lẻ.** **Token theft playbook** của Microsoft và
+  Elastic cho thấy phát hiện vững chắc phải nối Azure sign-in + Entra audit + Microsoft Graph activity + M365
+  audit trên `app_id`, `resource_id`, `incoming_token_type`, và đặc biệt
+  `token_protection_status_details.sign_in_session_status = "unbound"` — dấu hiệu của một token bị replay khỏi
+  thiết bị gốc. (learn.microsoft.com/security/operations/token-theft-playbook;
+  learn.microsoft.com/entra/id-protection/concept-identity-protection-risks)
+
+### 7.3 Active Directory — tradecraft ticket Kerberos (phần *lý do*)
+
+- **Giả vé, bỏ qua người gác (ATT&CK T1558 Steal or Forge Kerberos Tickets).** Golden (TGT giả từ hash
+  `krbtgt`), Silver (TGS giả cho một dịch vụ), và Diamond ticket cho phép người vận hành đúc quyền truy cập.
+  Điểm liên quan tới OPSEC: một **Silver Ticket trình một TGS giả *trực tiếp cho dịch vụ đích*, không vòng qua
+  Domain Controller**, nên các sự kiện phía DC (ví dụ 4769) mà việc săn Golden Ticket dựa vào **không bao giờ
+  phát ra** — phát hiện phải chuyển sang phía máy chủ/dịch vụ.
+
+### Đối trọng phát hiện
+
+- **Săn RC4 ở nơi lẽ ra phải là AES (etype 0x17).** Windows đã mặc định AES từ Vista / Server 2008, nên các vé
+  Kerberos mã hóa RC4 là bất thường trên một mạng hiện đại — một chỉ dấu rẻ, bền. **Tính khả thi đang tăng:**
+  DC Windows Server 2025 ngừng cấp TGT RC4 theo mặc định và Microsoft đang loại bỏ RC4 dần đến 2026. **Lưu ý cả
+  hai chiều:** một người vận hành lành nghề có thể giả vé *AES* (ví dụ Mimikatz `/aes256`) để đánh bại cuộc săn,
+  và các mạng cũ/chưa gia cố vẫn phát RC4 làm phương án dự phòng (dương tính giả).
+- Silver Ticket **khó hơn, không phải bất khả**: xác thực PAC, bất thường đăng nhập phía máy chủ (4624/4634 mà
+  không có 4768/4769 tương ứng ở DC), và lập đường cơ sở tài khoản dịch vụ vẫn bắt được chúng. **Đừng** dựa vào
+  quy tắc dân gian "một TGS không có TGT đứng trước = Golden Ticket" — tương quan đó đã được kiểm nghiệm và
+  không đúng. (adsecurity.org/?p=1515; attack.mitre.org/techniques/T1558; loại bỏ RC4 trên Windows Server 2025 —
+  learn.microsoft.com)
+
+---
+
+## 8. Chiều sâu endpoint & phát tán — nội tại EDR, đa hệ điều hành, và truy cập ban đầu
+
+> **Ghi chú độ phủ.** Mục này cố ý ngắn hơn và trình bày ở mức khái niệm: nó dựa trên ít nguồn được chứng thực
+> độc lập hơn §7, và bối cảnh né-tránh-endpoint thay đổi nhanh. Hãy coi các chi tiết là *chỉ dẫn tới nguồn gốc
+> cần kiểm chứng*, không phải sự thật đã chốt.
+
+### 8.1 Nội tại EDR & can thiệp — Defense Impairment trên máy chủ (phần *lý do*)
+
+- **EDR nhìn thấy ở đâu, và người vận hành cố im lặng ra sao.** EDR hiện đại lấy telemetry từ hook API user-mode,
+  kernel callback, và **ETW** (§5). Các né tránh mức khái niệm: **unhooking** (khôi phục một `ntdll` sạch để gỡ
+  hook user-mode), **direct/indirect syscall** (gọi các `Nt*` mà không qua stub bị hook), và **can thiệp
+  ETW/AMSI** (vá provider trong tiến trình để sự kiện không bao giờ rời khỏi máy). **BYOVD** (§5.2) là phiên bản
+  cấp kernel. Tất cả ánh xạ tới **Defense Impairment (TA0112)** / **Stealth (TA0005)** theo cú tách v19 (§1).
+
+### Đối trọng phát hiện
+
+- **Xem call stack, không chỉ lời gọi.** Phân tích **call-stack** kernel-ETW của Elastic Security Labs bắt được
+  các mối đe dọa trong-bộ-nhớ (mã được tiêm/không-backing, syscall bị can thiệp) bằng cách xét *nơi* lời gọi bắt
+  nguồn — các né tránh chỉ-ở-user-mode không lừa được telemetry nguồn-từ-kernel. Ghép với nguyên tắc **"sự vắng
+  mặt của telemetry được kỳ vọng"** (§5): một sensor im lặng tự nó là cảnh báo.
+  (elastic.co/security-labs/doubling-down-etw-callstacks)
+- **Rủi ro thực tế:** năm 2025 chứng kiến các nhóm ransomware tung công cụ **diệt-EDR** chuyên dụng (nền BYOVD)
+  như một giai đoạn tiền-mã-hóa — Defense Impairment được vận hành hóa. (expel.com phân tích diệt-EDR của ransomware Gentlemen)
+
+### 8.2 Ngoài Windows — macOS, Linux, container (phần *lý do*)
+
+- **macOS:** các rào chắn là **TCC** (quyền riêng tư/đồng thuận), **Gatekeeper + notarization**, và thuộc tính
+  **`com.apple.quarantine`** trên tệp tải về; các sản phẩm EDR tiêu thụ **Endpoint Security Framework (ESF)**.
+  macOS 15.4 (2025) **đã thêm sự kiện TCC vào ESF**, mở rộng khả năng thấy của người phòng thủ về lạm dụng đồng
+  thuận. (outflank.nl EDR internals macOS/Linux; mjtsai.com macOS 15.4 TCC/ESF)
+- **Linux:** tấn công và phòng thủ ngày càng gặp nhau ở **eBPF** — chính công cụ đo đạc trong-kernel cấp sức mạnh
+  cho **Falco** / các sensor hiện đại cũng có thể bị lạm dụng để ẩn mình; tradecraft cổ điển (chiếm `LD_PRELOAD`,
+  thực thi không-tệp `memfd_create`) bị đối phó bởi **auditd** và các sensor runtime eBPF.
+- **Container / Kubernetes:** dấu chân dịch sang **đánh cắp token service-account, lạm dụng RBAC, và thoát
+  container**; phát hiện runtime dựa vào **Falco** và sensor eBPF theo dõi syscall và K8s audit log.
+
+### 8.3 Truy cập ban đầu & phát tán — và các kiểm soát bắt được nó (phần *lý do*)
+
+- **Xu hướng phát tán.** **HTML smuggling (T1027.006)** lắp ráp payload ngay trong trình duyệt từ một tệp đính
+  kèm HTML để lách bộ lọc nội dung; các tệp **ISO/IMG và LNK** được ưa dùng vì các định dạng container trong lịch
+  sử **tước bỏ Mark-of-the-Web (MOTW)**.
+- **Kiểm soát làm tổn thương việc phát tán — MOTW (ATT&CK T1553.005, Subvert Trust Controls).** Khi có MOTW,
+  Office mở tệp ở Protected View / chặn macro và SmartScreen kiểm tra nó; tradecraft là *tước bỏ hoặc tránh* MOTW,
+  còn phòng thủ là đảm bảo nó **lan truyền** (Windows hiện đại nay áp MOTW cho tệp trích từ ISO/IMG đã mount) cộng
+  với **luật ASR** chặn các tiến trình con của Office và tệp thực thi từ script (§5).
+  (microsoft.com phân tích HTML-smuggling; attack.mitre.org/techniques/T1553/005)
+
+### 8.4 Hạ tầng C2 & lấy vân tay framework
+
+- **Hạ tầng bền bỉ** tái sử dụng thiết kế redirector / CDN / tên-miền-cũ của §2 và §4; do đó việc gỡ bỏ và phát
+  hiện nhắm vào lớp *tái sử dụng* (vân tay server JA4+/JARM, gom cụm chứng chỉ / passive-DNS) thay vì mặt tiền
+  dùng-một-lần — lại là Kim tự tháp Đau đớn (§1).
+- **Bối cảnh framework.** **Cobalt Strike** vẫn bị lạm dụng nhiều nhưng ngày càng bị thay thế trong báo cáo bởi các
+  framework mã nguồn mở — **Sliver, Mythic, Havoc** — chính vì mặc định của chúng ít bị ký hơn. Lợi thế của người
+  phòng thủ là **lấy vân tay đa-lớp** (§4): JA4+ bắt được Cobalt Strike và Sliver ngay cả khi chứng chỉ bị ngẫu
+  nhiên hóa. (redcanary.com xu hướng C2-framework; M-Trends 2026)
+
+---
+
+## 9. Mô phỏng theo tình báo mối đe dọa & quy kết
 
 Red teaming có giá trị nhất khi nó **mô phỏng một đối thủ cụ thể, liên quan** thay vì phô diễn các chiêu trò
 chung chung — điều này kiểm tra xem liệu khách hàng có thể phát hiện *những mối đe dọa thực sự nhắm vào họ*
@@ -452,9 +609,9 @@ hay không (phòng thủ theo tình báo mối đe dọa — threat-informed def
 
 ---
 
-## 8. Bản đồ nhanh Kỹ thuật → ATT&CK → phát hiện
+## 10. Bản đồ nhanh Kỹ thuật → ATT&CK → phát hiện
 
-*(Các ID kỹ thuật là mỏ neo ổn định; nhãn tactic phản ánh cú tách Stealth / Defense-Impairment của 2025 — xem §1.)*
+*(Các ID kỹ thuật là mỏ neo ổn định; nhãn tactic phản ánh cú tách Stealth / Defense-Impairment của v19 — xem §1.)*
 
 | Mục tiêu người vận hành | Lớp | ATT&CK | Tín hiệu phát hiện chính |
 |-------------------------|-----|--------|--------------------------|
@@ -470,31 +627,39 @@ hay không (phòng thủ theo tình báo mối đe dọa — threat-informed def
 | Không-tệp / trong-bộ-nhớ | Máy chủ | T1027, T1055, T1564 | AMSI, telemetry tiêm của EDR, Volatility malfind |
 | Làm suy yếu phòng thủ (AMSI/ETW/EDR) | Máy chủ | **T1685 / TA0112** (từng là T1562) | ETW EID 12, Sysmon EID 16/4, vắng-mặt-telemetry, blocklist driver |
 | Loại bỏ chỉ dấu | Dấu chân | T1070 (.001/.006) | Event ID 1102/104 forwarding, tính bất biến SIEM, $MFT/USN journal |
+| Vô hiệu hóa log cloud | Cloud | T1562.008 | Sự kiện đổi cấu hình, org-trail, sink bất biến, luật sink-modification |
+| Đánh cắp/replay token OAuth (PRT) | Danh tính | T1528, T1550.001, T1566 | Entra "Anomalous token", MDE truy-cập-PRT, tương quan đa-log phiên `unbound` |
+| Giả ticket Kerberos | Danh tính/AD | T1558 | Săn RC4 (etype 0x17), xác thực PAC, bất thường 4624/4634 phía máy chủ |
+| Can thiệp EDR / ETW / AMSI | Máy chủ | **T1562 / TA0112** | Phân tích call-stack kernel-ETW, vắng-mặt-telemetry, blocklist driver (HVCI) |
+| HTML smuggling / bypass MOTW | Phát tán | T1027.006, T1553.005 | Lan truyền MOTW, SmartScreen, luật ASR, Protected View |
+| TLS né JA3 / vân tay C2 | Lưu lượng | T1071, T1573 | JA4/JA4+ (hash extension đã-sắp-xếp), JA4X trên C2 (Cobalt Strike/Sliver) |
 
 ---
 
-## 9. Điều này ánh xạ vào SecForge như thế nào
+## 11. Điều này ánh xạ vào SecForge như thế nào
 
 - **Cho agent tấn công ([`ai_framework/`](../ai_framework/README.md)):** §0–§1 được biên dịch thành các quy
   tắc thường trực trong [system prompt](../ai_framework/agent/system.py) — ưu tiên ủy quyền, chọn hành động
   ít-ồn-ào-nhất mà vẫn chứng minh được luận điểm, ghi nhận mọi hành động, ở trong phạm vi, và đừng lãng phí
   công sức vào phá-hủy-tạo-tác cục bộ. Khi một cuộc đánh giá cần một kỹ thuật cụ thể, agent gợi lại nguyên
-  tắc §2–§6 liên quan và [kho ngữ liệu KB](KNOWLEDGE_BASE.md).
+  tắc §2–§8 liên quan và [kho ngữ liệu KB](KNOWLEDGE_BASE.md).
 - **Cho trụ cột phòng thủ ([`defense/`](../defense/README.md)):** *đối trọng phát hiện* của mỗi phần là danh
-  mục kiểm tra cho "liệu mục tiêu này có thấy được cuộc tấn công không?" — khả năng thấy TLS/JA3, telemetry
-  process (Sysmon), forwarding log/tính bất biến SIEM, giám sát can thiệp ETW/AMSI, giám sát bất thường DNS,
-  và các điểm mù impossible-travel.
+  mục kiểm tra cho "liệu mục tiêu này có thấy được cuộc tấn công không?" — khả năng thấy TLS/JA4+, telemetry
+  process (Sysmon) và phân tích call-stack kernel-ETW, forwarding log/tính bất biến SIEM, giám sát can thiệp
+  ETW/AMSI, giám sát bất thường DNS, các điểm mù impossible-travel, cùng bề mặt danh tính/cloud: phát hiện bất
+  thường token/đăng-nhập Entra, tính toàn vẹn log cloud (org-trail + sink bất biến), và săn bất thường
+  RC4/PAC của Kerberos.
 - **Cho kho tri thức:** các thẻ [`vuln_search/catalog/`](../vuln_search/catalog/INDEX.md) bao quát
   *cái gì* để khai thác; tệp này bao quát *cách vận hành bí mật và cách điều đó bị bắt* — một người bạn đồng
   hành tự nhiên ghép mỗi cuộc tấn công với phát hiện của nó.
 
 ---
 
-## 10. Tài liệu tham khảo
+## 12. Tài liệu tham khảo
 
 Được nhóm theo phần; tất cả đều là các nguồn công khai, có thẩm quyền. Các mục có tính khả thi hoặc taxonomy
-đã thay đổi, hoặc là nguồn thứ cấp/không chắc chắn, được đánh dấu trong §0–§6 và trong ghi chú kiểm chứng
-bên dưới.
+đã thay đổi, hoặc là nguồn thứ cấp/không chắc chắn, được đánh dấu tại chỗ (§0–§8) và trong ghi chú kiểm
+chứng bên dưới.
 
 **Chuẩn mực, ủy quyền & học thuyết OPSEC**
 - NIST SP 800-115 — https://csrc.nist.gov/pubs/sp/800/115/final ·
@@ -507,10 +672,11 @@ bên dưới.
   DoD CDSE — https://www.cdse.edu/Portals/124/Documents/student-guides/GS130-guide.pdf ·
   DTIC OPSEC guide — https://apps.dtic.mil/sti/pdfs/AD1038572.pdf
 
-**MITRE ATT&CK (lưu ý cú tách Stealth / Defense-Impairment của 2025)**
+**MITRE ATT&CK (lưu ý cú tách Stealth / Defense-Impairment của v19, chỉ Enterprise)**
+- Ghi chú phát hành v19 (2026-04-28) — https://attack.mitre.org/resources/updates/updates-april-2026/ ·
+  lịch sử phiên bản — https://attack.mitre.org/resources/versions/ · changelog — https://attack.mitre.org/resources/changelog.html
 - Stealth (TA0005, hiện hành) — https://attack.mitre.org/tactics/TA0005/ ·
   Defense Impairment (TA0112, mới) — https://attack.mitre.org/tactics/TA0112/ ·
-  T1685 Disable or Modify Tools — https://attack.mitre.org/techniques/T1685/ ·
   Defense Evasion cũ (v15, trước tách) — https://attack.mitre.org/versions/v15/tactics/TA0005/ ·
   giải thích cú tách v19 — https://medium.com/mitre-attack/att-ck-v19-the-defense-evasion-split-ics-sub-techniques-new-ai-social-engineering-coverage-ff329cb65d66
 - Kỹ thuật: T1090 (+.002/.003/.004), T1071(+.004), T1573, T1568(.002), T1583/T1584/T1608,
@@ -572,14 +738,50 @@ bên dưới.
   https://www.cyberengage.org/post/volatility-plugins-plugin-window-malfind-let-s-talk-about-it ·
   USN Journal / NTFS forensics — https://andreafortuna.org/2025/09/06/usn-journal/ · https://www.unjaena.com/en/blog/windows-artifact-guide
 
+**Kế nhiệm vân tay TLS & beaconing (JA4/JA4+, RITA) — §4**
+- Cloudflare "JA4 Signals" — https://blog.cloudflare.com/ja4-signals/ ·
+  FoxIO JA4+ — https://github.com/FoxIO-LLC/ja4 · CSV ánh xạ JA4+ — https://raw.githubusercontent.com/FoxIO-LLC/ja4/main/ja4plus-mapping.csv ·
+  Blog JA4+ (John Althouse) — https://blog.foxio.io/ja4+-network-fingerprinting
+- RITA v5 (ActiveCM) — https://github.com/activecm/rita · lab beaconing — https://activecm.github.io/threat-hunting-labs/beacons/ ·
+  BHIS "Detecting Malware Beacons with Zeek and RITA" — https://www.blackhillsinfosec.com/detecting-malware-beacons-with-zeek-and-rita/
+
+**Cloud / danh tính / Active Directory — §7**
+- Unit 42 "Cloud Logging Defense Evasion" — https://unit42.paloaltonetworks.com/cloud-logging-defense-evasion/ ·
+  MITRE T1562.008 — https://attack.mitre.org/techniques/T1562/008/ ·
+  Luật GCP Logging Sink Modification của Elastic — https://www.elastic.co/guide/en/security/current/gcp-logging-sink-modification.html
+- Token theft playbook của Microsoft — https://learn.microsoft.com/en-us/security/operations/token-theft-playbook ·
+  Rủi ro Entra ID Protection — https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks ·
+  Bảo vệ token Entra — https://learn.microsoft.com/en-us/entra/identity/devices/protecting-tokens-microsoft-entra-id
+- Elastic Security Labs "Entra ID OAuth phishing detection" — https://www.elastic.co/security-labs/entra-id-oauth-phishing-detection ·
+  Dirk-jan Mollema "Phishing for Entra PRTs" — https://dirkjanm.io/phishing-for-microsoft-entra-primary-refresh-tokens/
+- adsecurity.org Kerberos (Sean Metcalf) — https://adsecurity.org/?p=1515 · MITRE T1558 Steal/Forge Kerberos Tickets — https://attack.mitre.org/techniques/T1558/
+
+**Chiều sâu endpoint & phát tán — §8**
+- Elastic Security Labs "Detecting In-Memory Threats with Kernel ETW Call Stacks" — https://www.elastic.co/security-labs/doubling-down-etw-callstacks ·
+  Outflank "EDR internals for macOS and Linux" — https://www.outflank.nl/blog/2024/06/03/edr-internals-macos-linux/ ·
+  macOS 15.4 thêm sự kiện TCC vào ESF — https://mjtsai.com/blog/2025/03/28/macos-15-4-adds-tcc-events-to-endpoint-security/
+- Microsoft "HTML smuggling surges" — https://www.microsoft.com/en-us/security/blog/2021/11/11/html-smuggling-surges-highly-evasive-loader-technique-increasingly-used-in-banking-malware-targeted-attacks/ ·
+  MITRE T1553.005 Mark-of-the-Web Bypass — https://attack.mitre.org/techniques/T1553/005/
+- Xu hướng C2-framework của Red Canary — https://redcanary.com/threat-detection-report/trends/c2-frameworks/ ·
+  Mandiant M-Trends 2025 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2025/ · M-Trends 2026 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026
+
 > **Ghi chú kiểm chứng.** Các tuyên bố về mạng/máy chủ ở §2–§6 được hậu thuẫn bằng các lần tải trực tiếp
 > nhiều nguồn (MITRE, Microsoft Learn, các blog kỹ thuật phát hiện của nhà cung cấp); ủy quyền/OPSEC ở §0–§1
-> và mô phỏng ở §7 được neo vào NIST SP 800-115, PTES, và thư viện MITRE CTID. Các điểm không chắc chắn được
-> đánh dấu: (a) **cú tách tactic ATT&CK 2025** đã được xác nhận là đang hoạt động, nhưng hãy coi ngày phát
-> hành/chỉnh sửa chính xác là độ-tin-cậy-thấp — hãy kiểm chứng lại TA0005/TA0112/T1685 tại attack.mitre.org;
-> (b) tính khả thi của domain-fronting và các loại trừ VPN/cloud của impossible-travel thay đổi theo thời
-> gian — hãy kiểm chứng lại theo từng nhà cung cấp; (c) các event ID nội-bộ-provider của AMSI/ETW (1101/1201),
-> chi tiết SIEM-bất-biến, ánh xạ sub-technique chính xác của BYOVD, và con số "80% mẫu dùng T1055" là nguồn
-> thứ cấp/đơn-nguồn; (d) một vài nguồn trả về lỗi SSL/403 trong quá trình nghiên cứu (0xc0decafe PE-timestamps,
-> Cobalt Strike JARM, trang cha T1562) và đã được chứng thực qua các trích đoạn chỉ mục tìm kiếm đối chiếu với
-> tài liệu gốc.
+> và mô phỏng ở §9 được neo vào NIST SP 800-115, PTES, và thư viện MITRE CTID. Phần danh tính/cloud (§7) và các
+> bổ sung JA4/JA4+ (§4) đến từ một đợt nghiên cứu đa-nguồn, được kiểm chứng đối kháng vào 2026 (nguồn gốc:
+> MITRE, Microsoft Learn, Cloudflare/FoxIO, Elastic Security Labs, Unit 42, adsecurity.org). Các điểm không
+> chắc chắn được đánh dấu:
+> (a) **cú tách tactic ATT&CK v19** đã được xác nhận đối chiếu nguồn MITRE gốc (v19.0 phát hành 2026-04-28,
+> v19.1 hiện hành; chỉ Enterprise), **nhưng việc ánh xạ lại từng kỹ thuật** vào Stealth hay Defense Impairment
+> là không đồng nhất — hãy tra tactic của từng kỹ thuật tại attack.mitre.org thay vì suy đoán;
+> (b) tính khả thi của domain-fronting và các loại trừ VPN/cloud của impossible-travel thay đổi theo thời gian
+> — hãy kiểm chứng lại theo từng nhà cung cấp; việc săn bất thường RC4-Kerberos đang *mạnh lên* (Server 2025 /
+> loại bỏ RC4 đến 2026) nhưng dương-tính-giả trên các mạng cũ;
+> (c) **§8 (chiều sâu endpoint & phát tán) dựa trên ít chứng thực độc lập hơn §7** và được trình bày như các
+> chỉ dẫn tới nguồn gốc; các event ID nội-bộ-provider của AMSI/ETW (1101/1201), chi tiết SIEM-bất-biến, ánh xạ
+> sub-technique chính xác của BYOVD, và con số "80% mẫu dùng T1055" vẫn là nguồn thứ cấp/đơn-nguồn;
+> (d) ba tuyên bố nghiên cứu đã bị **kiểm nghiệm và bác bỏ — đừng đưa lại vào:** rằng JA4 đánh bại né tránh
+> bằng cách sắp xếp *cipher* (cơ chế cốt lõi là sắp xếp *extension*), quy tắc dân gian "một TGS không có TGT
+> đứng trước = Golden Ticket," và một cách đọc sai trang phiên bản ATT&CK; (e) một vài nguồn trả về lỗi SSL/403
+> trong nghiên cứu trước đó (0xc0decafe PE-timestamps, Cobalt Strike JARM, trang cha T1562) và đã được chứng
+> thực qua các trích đoạn chỉ mục tìm kiếm đối chiếu với tài liệu gốc.

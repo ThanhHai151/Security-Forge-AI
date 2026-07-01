@@ -140,8 +140,10 @@ lookup; content carries a language tag so the viewer can request the variant it 
   backend, and feature flags. Lives with the backend.
 - **Secrets** — never in files; model API keys come from an environment variable or the
   account store (OAuth tokens included), and the API layer masks them.
-- **Safety** — tools that act on real targets must require explicit authorization of the
-  target; findings from Defense are proposals, not automatic changes.
+- **Safety** — every network action (built-in HTTP, the `run_recon` external-CLI runner, the
+  headless browser) passes through the one `require_authorized[_host]` scope gate; intrusive
+  scans and state-changing calls are held for operator approval; findings are replayed by a
+  verifier before they're trusted; and Defense findings are proposals, not automatic changes.
 - **Extensibility = add a file.** New skill → a skill manifest in `skills/`. New tool →
   an entry in `tools/`. New provider → a preset in `backend/providers.py`. The platform
   discovers them.

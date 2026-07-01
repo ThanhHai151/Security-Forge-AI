@@ -23,7 +23,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from ai_framework.agent.contracts import ToolCall
-from ai_framework.tools.base import ToolRegistry
+from ai_framework.tools.base import ToolRegistry, tool_is_mutating
 
 
 class GuardrailConfig(BaseModel):
@@ -50,9 +50,9 @@ def _body(call: ToolCall) -> str:
     return json.dumps(call.arguments, sort_keys=True)
 
 
-def _is_mutating(name: str, registry: ToolRegistry) -> bool:
+def _is_mutating(call: ToolCall, registry: ToolRegistry) -> bool:
     try:
-        return bool(getattr(registry.get(name), "mutating", False))
+        return tool_is_mutating(registry.get(call.name), call.arguments)
     except KeyError:
         return False
 
@@ -75,13 +75,10 @@ class GuardrailController:
         if self._exact_fail[(name, body)] >= cfg.exact_failure_block_after:
             return Decision(allow=False, reason=f"identical {name} call failed repeatedly")
 
-        limit = (
-            cfg.mutating_failure_block_after
-            if _is_mutating(name, registry)
-            else cfg.same_tool_halt_after
-        )
+        mutating = _is_mutating(call, registry)
+        limit = cfg.mutating_failure_block_after if mutating else cfg.same_tool_halt_after
         if self._tool_fail[name] >= limit:
-            kind = "mutating " if _is_mutating(name, registry) else ""
+            kind = "mutating " if mutating else ""
             return Decision(allow=False, reason=f"{kind}tool {name} keeps failing")
 
         return Decision(allow=True)

@@ -30,6 +30,19 @@ const send = (method, p, body) =>
 export const startRun = (body) => send("POST", "/runs", body);
 export const getRun = (id) => get(`/runs/${encodeURIComponent(id)}`);
 
+// ── Campaigns (the continuous "infinite" engagement) ──
+export const startCampaign = (body) => send("POST", "/campaigns", body); // {domain, backend?, ...}
+export const listCampaigns = () => get("/campaigns");
+export const getCampaign = (id) => get(`/campaigns/${encodeURIComponent(id)}`);
+const campaignAction = (id, action, body) =>
+  send("POST", `/campaigns/${encodeURIComponent(id)}/${action}`, body);
+export const continueCampaign = (id) => campaignAction(id, "continue");
+export const stopCampaign = (id) => campaignAction(id, "stop");
+export const approveAction = (id, approvalId) =>
+  campaignAction(id, "approve", { approval_id: approvalId });
+export const rejectAction = (id, approvalId) =>
+  campaignAction(id, "reject", { approval_id: approvalId });
+
 // ── AI router: accounts + rotation policy ──
 export const getProviderTypes = () => get("/provider-types");
 export const getAccounts = () => get("/accounts"); // -> { policy, accounts: [...] }

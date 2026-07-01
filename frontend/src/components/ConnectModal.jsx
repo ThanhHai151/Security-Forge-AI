@@ -157,7 +157,10 @@ function ConnectionRow({ a, t, onChanged }) {
 export default function ConnectModal({ provider, connections, t, onClose, onChanged }) {
   const isOAuth = provider.auth === "oauth";
   const needsKey = provider.auth === "key";
-  const editableUrl = provider.category === "custom" || !provider.base_url;
+  // Local proxies expose an editable host/port too, so a user can point at a custom port
+  // (e.g. an Antigravity-Manager proxy on a non-default port) — that's the "manage proxy" knob.
+  const editableUrl =
+    provider.category === "custom" || provider.category === "local" || !provider.base_url;
   // Localized one-liner under the title (the catalog's English `note` is for developers only).
   const hint = isOAuth
     ? t.oauthHint
@@ -359,7 +362,15 @@ export default function ConnectModal({ provider, connections, t, onClose, onChan
                     onChange={(e) => setModel(e.target.value)}
                     className={inputCls}
                     placeholder="model id"
+                    list="model-suggestions"
                   />
+                )}
+                {formModels.length === 0 && (provider.models?.length ?? 0) > 0 && (
+                  <datalist id="model-suggestions">
+                    {provider.models.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
                 )}
                 <button
                   onClick={onProbe}
@@ -374,6 +385,27 @@ export default function ConnectModal({ provider, connections, t, onClose, onChan
                   )}
                 </button>
               </div>
+              {formModels.length === 0 && (provider.models?.length ?? 0) > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <span className="text-[10.5px] font-mono uppercase tracking-wider text-zinc-600 self-center">
+                    {t.pvModelSuggest}
+                  </span>
+                  {provider.models.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModel(m)}
+                      className={`px-2 py-0.5 text-[11px] font-mono border transition-colors ${
+                        model === m
+                          ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/[0.08]"
+                          : "border-white/[0.08] text-zinc-400 hover:text-zinc-100 hover:border-white/20"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
             </Field>
 
             <Field label={t.rtTier}>

@@ -29,8 +29,13 @@ other `README.md` is scoped to the directory it lives in.
 | 6 | **Persistent memory (Hermes-style)** — findings, target facts, and lessons persist across steps and sessions. | [`ai_framework/memory/`](ai_framework/memory/README.md) |
 | 7 | **Self-research** — when the KB falls short, the agent researches (web + CVE) and folds the result back into its working knowledge. | [`ai_framework/research/`](ai_framework/research/README.md) |
 | 8 | **Structured note-taking** — captures findings, working payloads, and to-dos; reviewable in the UI and reusable by the agent. | [`ai_framework/notes/`](ai_framework/notes/README.md) |
-| 9 | **Red-team OPSEC reference** — stealth/evasion tradecraft paired with its blue-team detection counterpart. | [`docs/RED_TEAM_OPSEC.md`](docs/RED_TEAM_OPSEC.md) |
-| 10 | **Bilingual (EN ⇄ VI)** — UI strings and displayed content switch between English and Vietnamese. | [`i18n/`](i18n/README.md) |
+| 9 | **Real external tooling** — a scope-gated `run_recon` runs allow-listed CLIs (httpx, nuclei, ffuf, nmap, subfinder…); every host is authorized-gated, intrusive scans held for approval. | [`ai_framework/tools/external.py`](ai_framework/tools/external.py) |
+| 10 | **Authenticated sessions + OPSEC transport** — a per-run cookie jar (`login`/`set_auth`, auto-CSRF) so authenticated bugs are reachable, routed through an optional proxy + custom User-Agent. | [`ai_framework/tools/session.py`](ai_framework/tools/session.py) |
+| 11 | **JWT attack kit** — `jwt_attack`: alg-none forge, HS256 secret cracking, and token forging, all local/stdlib. | [`ai_framework/tools/jwt.py`](ai_framework/tools/jwt.py) |
+| 12 | **Verified findings** — a finding carries a `repro` that SecForge replays; the report marks each ✅ verified or ⚠️ unverified, killing false positives. | [`ai_framework/agent/verify.py`](ai_framework/agent/verify.py) |
+| 13 | **Recon asset graph + framework mapping** — discovered endpoints/params/tech tracked as structure; every class mapped to CWE · OWASP · ATT&CK · WSTG. | [`ai_framework/agent/assets.py`](ai_framework/agent/assets.py), [`vuln_search/mapping.py`](vuln_search/mapping.py) |
+| 14 | **Red-team OPSEC reference** — stealth/evasion tradecraft paired with its blue-team detection counterpart. | [`docs/RED_TEAM_OPSEC.md`](docs/RED_TEAM_OPSEC.md) |
+| 15 | **Bilingual (EN ⇄ VI)** — UI strings and displayed content switch between English and Vietnamese. | [`i18n/`](i18n/README.md) |
 
 ---
 

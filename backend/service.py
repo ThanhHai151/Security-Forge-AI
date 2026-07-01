@@ -12,27 +12,49 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
-from ai_framework.agent.contracts import Budget, Run, RunConfig
-
-if TYPE_CHECKING:
-    from backend.pillars import PlatformServices
+from ai_framework.agent.assets import JsonlAssetStore
+from ai_framework.agent.campaign import (
+    ApprovalStatus,
+    Campaign,
+    CampaignConfig,
+    CampaignStatus,
+    CampaignStore,
+    CoverageItem,
+    CoverageStatus,
+    PendingApproval,
+    coverage_signature,
+    derive_coverage,
+    is_hardened,
+    record_manual_action,
+)
+from ai_framework.agent.contracts import Budget, Run, RunConfig, ToolCall
 from ai_framework.agent.guardrails import GuardrailController
 from ai_framework.agent.loop import run_loop
 from ai_framework.agent.opsec import Pacer
 from ai_framework.agent.run_store import JsonRunStore
+from ai_framework.agent.system import campaign_context_block
+from ai_framework.agent.verify import FindingVerifier
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
 from ai_framework.notes.report import render_json, render_markdown
 from ai_framework.notes.store import JsonlFindingStore
 from ai_framework.router.accounts import AccountStore
-from ai_framework.tools.base import ToolRegistry
-from ai_framework.tools.builtin import HttpGetTool, NoteFindingTool
+from ai_framework.tools.base import ToolContext, ToolRegistry
+
+if TYPE_CHECKING:
+    from backend.pillars import PlatformServices
+from ai_framework.tools.auth import LoginTool, SetAuthTool
+from ai_framework.tools.browser import BrowserRenderTool
+from ai_framework.tools.builtin import HttpGetTool, NoteFindingTool, RecordAssetTool
+from ai_framework.tools.external import ExternalReconTool
+from ai_framework.tools.jwt import JwtAttackTool
 from ai_framework.tools.security import (
     DecodeEncodeTool,
     HttpRequestTool,
     InspectHeadersTool,
     RobotsSitemapTool,
 )
+from ai_framework.tools.skills_tool import LoadSkillTool
 
 
 def default_registry() -> ToolRegistry:
@@ -40,10 +62,17 @@ def default_registry() -> ToolRegistry:
     for tool in (
         HttpGetTool(),
         NoteFindingTool(),
+        RecordAssetTool(),
         HttpRequestTool(),
         InspectHeadersTool(),
         RobotsSitemapTool(),
         DecodeEncodeTool(),
+        JwtAttackTool(),
+        LoginTool(),
+        SetAuthTool(),
+        ExternalReconTool(),
+        BrowserRenderTool(),
+        LoadSkillTool(),
     ):
         reg.register(tool)
     return reg
@@ -75,19 +104,34 @@ class RunService:
         accounts: AccountStore | None = None,
         findings_path: str | None = "findings_store.jsonl",
         runs_dir: str | None = "runs_store",
+        campaigns_dir: str | None = "campaigns_store",
+        assets_path: str | None = "assets_store.jsonl",
     ) -> None:
         self._registry = registry or default_registry()
         self._memory_path = memory_path
         self._findings_path = findings_path
+        self._assets_path = assets_path
         self._budget = budget
         self.accounts = accounts or AccountStore()
         self._runs: dict[str, Run] = {}
         self._run_store = JsonRunStore(runs_dir) if runs_dir else None
+        self._campaigns: dict[str, Campaign] = {}
+        self._campaign_store = CampaignStore(campaigns_dir) if campaigns_dir else None
         self._lock = threading.Lock()
         self._pillars: PlatformServices | None = None
 
     def _findings(self) -> JsonlFindingStore | None:
         return JsonlFindingStore(self._findings_path) if self._findings_path else None
+
+    def _assets(self) -> JsonlAssetStore | None:
+        return JsonlAssetStore(self._assets_path) if self._assets_path else None
+
+    def assets_summary(self, target: str = "") -> dict:
+        """Discovered attack surface (optionally for one target) — backs the recon view."""
+        store = self._assets()
+        if store is None:
+            return {"total": 0, "by_kind": {}, "values": {}, "targets": [], "recent": []}
+        return store.summary(target)
 
     @property
     def pillars(self) -> PlatformServices:
@@ -125,6 +169,8 @@ class RunService:
                 pacer=pacer,
                 findings=self._findings(),
                 on_turn=checkpoint,
+                verifier=FindingVerifier(),
+                assets=self._assets(),
             )
         except Exception as exc:  # noqa: BLE001 - surface to the console, don't lose the run
             run.outcome = "error"
@@ -176,3 +222,194 @@ class RunService:
         if fmt == "json":
             return render_json(findings, target=run.config.target)
         return render_markdown(findings, target=run.config.target, goal=run.config.goal)
+
+    # ── Campaigns: the continuous ("infinite") engagement layer ──────────────────────
+
+    def _get_campaign_obj(self, campaign_id: str) -> Campaign | None:
+        with self._lock:
+            campaign = self._campaigns.get(campaign_id)
+        if campaign is not None:
+            return campaign
+        return self._campaign_store.load(campaign_id) if self._campaign_store else None
+
+    def _save_campaign(self, campaign: Campaign) -> None:
+        with self._lock:
+            self._campaigns[campaign.id] = campaign
+        if self._campaign_store is not None:
+            self._campaign_store.save(campaign)
+
+    def _phase_goal(self, campaign: Campaign, phase_index: int) -> str:
+        """Compose the objective for one phase — recon-first, then progressively deeper."""
+        domain = campaign.config.domain
+        if phase_index == 0:
+            return (
+                f"Recon and map the attack surface of {domain}; identify the technology stack "
+                "and likely vulnerability classes, and probe read-only. Do not modify data — "
+                "propose any state-changing test for manual approval instead."
+            )
+        return (
+            f"Continue the authorized engagement against {domain}. Go deeper on confirmed leads "
+            "and wider into untried techniques; do not repeat what earlier phases already tried. "
+            "Keep every action read-only unless the operator approves a state-changing test."
+        )
+
+    def _run_phase(self, campaign: Campaign) -> None:
+        """Execute one phase (a bounded run) on a worker thread and fold in its results."""
+        cfg = campaign.config
+        phase_index = campaign.phase_count  # 0-based index of the phase we are about to run
+        untried = [c.technique for c in campaign.coverage if c.status == CoverageStatus.untried]
+        addon = campaign_context_block(phase_index + 1, untried, campaign.carry_over_plan)
+        run_config = RunConfig(
+            goal=self._phase_goal(campaign, phase_index),
+            target=cfg.target_url(),
+            step_budget=cfg.phase_step_budget,
+            backend=cfg.backend,
+            model=cfg.model,
+            base_url=cfg.base_url,
+            authorized_targets=cfg.all_authorized(),
+            opsec_min_interval=cfg.opsec_min_interval,
+            opsec_jitter=cfg.opsec_jitter,
+        )
+        run = Run(config=run_config)
+        with self._lock:
+            self._runs[run.id] = run
+        campaign.phases.append(run.id)
+        campaign.status = CampaignStatus.running
+        self._save_campaign(campaign)
+
+        def on_hold(call: ToolCall, reasoning: str) -> None:
+            campaign.pending_approvals.append(
+                PendingApproval(phase=phase_index + 1, tool_call=call, rationale=reasoning)
+            )
+
+        memory = JsonlMemoryStore(self._memory_path) if self._memory_path else None
+        checkpoint = self._run_store.save if self._run_store else None
+        prior = list(campaign.coverage)
+        try:
+            backend = self._backend_for(run_config)
+            run_loop(
+                run_config,
+                backend,
+                self._registry,
+                memory,
+                self._budget,
+                run=run,
+                guardrail=GuardrailController(),
+                pacer=Pacer(cfg.opsec_min_interval, cfg.opsec_jitter),
+                findings=self._findings(),
+                on_turn=checkpoint,
+                hold_mutating=True,
+                on_hold=on_hold,
+                system_addon=addon,
+                verifier=FindingVerifier(),
+                assets=self._assets(),
+            )
+        except Exception as exc:  # noqa: BLE001 - surface to the console, don't lose state
+            run.outcome = "error"
+            run.error = f"{type(exc).__name__}: {exc}"
+            campaign.status = CampaignStatus.error
+            campaign.error = run.error
+            if self._run_store is not None:
+                self._run_store.save(run)
+            self._save_campaign(campaign)
+            return
+        if self._run_store is not None:
+            self._run_store.save(run)
+
+        # Fold this phase's transcript into the tried/untried map and decide what's next.
+        prev_confirmed, _ = coverage_signature(prior)
+        prev_techs = {c.technique for c in prior}
+        campaign.coverage = derive_coverage(run, prior, phase_index + 1)
+        new_confirmed, _ = coverage_signature(campaign.coverage)
+        new_techs = {c.technique for c in campaign.coverage}
+        if run.transcript and run.transcript[-1].next_plan:
+            campaign.carry_over_plan = run.transcript[-1].next_plan
+        # Progress = a new confirmed finding OR a newly surfaced technique. No progress across
+        # consecutive phases ⇒ the target looks well-defended (hardened).
+        made_progress = bool(new_techs - prev_techs) or new_confirmed > prev_confirmed
+        campaign.hardened_streak = 0 if made_progress else campaign.hardened_streak + 1
+        campaign.status = (
+            CampaignStatus.hardened if is_hardened(campaign) else CampaignStatus.awaiting_user
+        )
+        self._save_campaign(campaign)
+
+    def start_campaign(self, config: CampaignConfig) -> str:
+        campaign = Campaign(config=config)
+        # Seed the map with the one lead we always start from: reconnaissance.
+        campaign.coverage = [
+            CoverageItem(technique="recon", description="initial reconnaissance", phase=1)
+        ]
+        self._save_campaign(campaign)
+        threading.Thread(target=self._run_phase, args=(campaign,), daemon=True).start()
+        return campaign.id
+
+    def continue_campaign(self, campaign_id: str) -> bool:
+        campaign = self._get_campaign_obj(campaign_id)
+        if campaign is None or campaign.status not in (
+            CampaignStatus.awaiting_user,
+            CampaignStatus.hardened,
+        ):
+            return False
+        threading.Thread(target=self._run_phase, args=(campaign,), daemon=True).start()
+        return True
+
+    def stop_campaign(self, campaign_id: str) -> bool:
+        campaign = self._get_campaign_obj(campaign_id)
+        if campaign is None:
+            return False
+        campaign.status = CampaignStatus.stopped
+        self._save_campaign(campaign)
+        return True
+
+    def approve_action(self, campaign_id: str, approval_id: str) -> bool:
+        """Execute one operator-approved held action — the only way a mutating call ever runs."""
+        campaign = self._get_campaign_obj(campaign_id)
+        if campaign is None:
+            return False
+        approval = next(
+            (p for p in campaign.pending_approvals if p.id == approval_id), None
+        )
+        if approval is None or approval.status != ApprovalStatus.pending:
+            return False
+        ctx = ToolContext(authorized_targets=campaign.config.all_authorized())
+        Pacer(campaign.config.opsec_min_interval, campaign.config.opsec_jitter).wait(
+            campaign.config.domain
+        )
+        result = self._registry.execute(approval.tool_call, ctx)
+        approval.status = ApprovalStatus.approved
+        approval.result_log = result.log
+        campaign.coverage = record_manual_action(
+            campaign.coverage, approval.tool_call, result.ok, approval.phase
+        )
+        self._save_campaign(campaign)
+        return True
+
+    def reject_action(self, campaign_id: str, approval_id: str) -> bool:
+        campaign = self._get_campaign_obj(campaign_id)
+        if campaign is None:
+            return False
+        approval = next(
+            (p for p in campaign.pending_approvals if p.id == approval_id), None
+        )
+        if approval is None:
+            return False
+        approval.status = ApprovalStatus.rejected
+        self._save_campaign(campaign)
+        return True
+
+    def get_campaign(self, campaign_id: str) -> dict | None:
+        """Full campaign state with each phase's run transcript inlined (for the terminal UI)."""
+        campaign = self._get_campaign_obj(campaign_id)
+        if campaign is None:
+            return None
+        data = campaign.model_dump(mode="json")
+        phase_runs = []
+        for run_id in campaign.phases:
+            run = self.get_run(run_id)
+            if run is not None:
+                phase_runs.append(run.model_dump(mode="json"))
+        data["phase_runs"] = phase_runs
+        return data
+
+    def list_campaigns(self) -> list[dict]:
+        return self._campaign_store.list_campaigns() if self._campaign_store else []

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from knowledge_base.index import KnowledgeBase, repo_root
 from vuln_search.catalog import TechniqueCard, load_catalog
 from vuln_search.cve import Cve, CveLookup
+from vuln_search.mapping import mapping_for
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -28,6 +29,8 @@ class VulnCandidate(BaseModel):
     owasp: str
     score: float
     why: str = ""
+    # Industry-taxonomy references (CWE / OWASP / ATT&CK / WSTG) for reports & navigation.
+    mapping: dict = Field(default_factory=dict)
 
 
 class VulnSearchResult(BaseModel):
@@ -93,6 +96,7 @@ class VulnSearch:
                         owasp=card.owasp,
                         score=score,
                         why=why,
+                        mapping=mapping_for(card.slug),
                     )
                 )
         candidates.sort(key=lambda c: (-c.score, c.title))

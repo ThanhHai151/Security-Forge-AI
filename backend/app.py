@@ -16,7 +16,14 @@ API routes (with or without the ``/api`` prefix):
     GET  /runs                 -> 200 {"runs": [summaries]}    (persisted run history)
     GET  /runs/{id}            -> 200 <Run JSON> | 404   (outcome=="incomplete" => running)
     GET  /runs/{id}/report?format=md|json -> 200 report | 404  (findings as pentest report)
+    POST /campaigns            body: {domain, backend?, model?, authorized_targets?,
+                                      phase_step_budget?} -> 201 {"id": ...}  (continuous run)
+    GET  /campaigns            -> 200 {"campaigns": [summaries]}
+    GET  /campaigns/{id}       -> 200 <Campaign JSON + phase_runs> | 404
+    POST /campaigns/{id}/continue|stop           -> 200 {"ok": bool} | 409
+    POST /campaigns/{id}/approve|reject  body: {approval_id} -> 200 {"ok": bool} | 409
     GET  /findings?target=...  -> 200 {total, by_severity, targets, recent}
+    GET  /assets?target=...    -> 200 {total, by_kind, values, targets, recent}  (recon graph)
     GET    /provider-types     -> 200 [catalog presets: id,label,category,base_url,auth,...]
     GET    /accounts           -> 200 {policy, accounts:[masked + health]}
     POST   /accounts           -> 201 {account}            body: {label, base_url, api_key, ...}
@@ -53,6 +60,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from ai_framework.agent.campaign import CampaignConfig
 from ai_framework.agent.contracts import RunConfig
 from ai_framework.router.accounts import Account
 from ai_framework.router.oauth import PROVIDERS as OAUTH_PROVIDERS
@@ -121,6 +129,27 @@ def make_handler(
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
                 return self._send(201, {"id": service.start_run(config)})
+            if path == "/campaigns":
+                try:
+                    cfg = CampaignConfig.model_validate(self._body())
+                except Exception as exc:  # noqa: BLE001
+                    return self._send(400, {"error": str(exc)})
+                return self._send(201, {"id": service.start_campaign(cfg)})
+            if path.startswith("/campaigns/"):
+                rest = path[len("/campaigns/") :]
+                body = self._body()
+                cid, _, action = rest.partition("/")
+                if action == "continue":
+                    ok = service.continue_campaign(cid)
+                elif action == "stop":
+                    ok = service.stop_campaign(cid)
+                elif action == "approve":
+                    ok = service.approve_action(cid, body.get("approval_id", ""))
+                elif action == "reject":
+                    ok = service.reject_action(cid, body.get("approval_id", ""))
+                else:
+                    return self._send(404, {"error": "unknown campaign action"})
+                return self._send(200 if ok else 409, {"ok": ok})
             if path == "/accounts":
                 try:
                     account = Account.model_validate(self._body())
@@ -255,11 +284,21 @@ def make_handler(
                 return self._send(200, service.pillars.vuln_search(q, online, locale))
             if path.startswith("/i18n/"):
                 return self._send(200, service.pillars.i18n(path.removeprefix("/i18n/")))
+            if path == "/campaigns":
+                return self._send(200, {"campaigns": service.list_campaigns()})
+            if path.startswith("/campaigns/"):
+                campaign = service.get_campaign(path.removeprefix("/campaigns/"))
+                if campaign is None:
+                    return self._send(404, {"error": "unknown campaign id"})
+                return self._send(200, campaign)
             if path == "/runs":
                 return self._send(200, {"runs": service.list_runs()})
             if path == "/findings":
                 target = (query.get("target") or [""])[0]
                 return self._send(200, service.findings_summary(target))
+            if path == "/assets":
+                target = (query.get("target") or [""])[0]
+                return self._send(200, service.assets_summary(target))
             if path.startswith("/runs/") and path.endswith("/report"):
                 rid = path[len("/runs/") : -len("/report")]
                 fmt = (query.get("format") or ["md"])[0]

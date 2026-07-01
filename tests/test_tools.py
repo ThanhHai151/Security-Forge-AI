@@ -36,11 +36,9 @@ def test_unauthorized_target_refused():
     assert "not authorized" in result.log
 
 
-def test_authorized_target_passes_gate(monkeypatch):
-    # An explicitly authorized non-local host must get past the safety gate. We stub the
-    # network call so the test proves authorization, not connectivity.
-    import ai_framework.tools.builtin as builtin
-
+def test_authorized_target_passes_gate():
+    # An explicitly authorized non-local host must get past the safety gate. We inject a stub
+    # session so the test proves authorization, not connectivity.
     class _Resp:
         status = 200
 
@@ -53,9 +51,13 @@ def test_authorized_target_passes_gate(monkeypatch):
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(builtin, "urlopen", lambda *a, **k: _Resp())
+    class _StubSession:
+        def open(self, req, timeout):  # duck-typed opener
+            return _Resp()
+
     tool = HttpGetTool()
-    log = tool.run({"url": "http://203.0.113.1/"}, ToolContext(authorized_targets={"203.0.113.1"}))
+    ctx = ToolContext(authorized_targets={"203.0.113.1"}, session=_StubSession())
+    log = tool.run({"url": "http://203.0.113.1/"}, ctx)
     assert "HTTP 200" in log
 
 

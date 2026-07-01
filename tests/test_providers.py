@@ -14,7 +14,7 @@ from backend.providers import CATEGORIES, PROVIDER_TYPES, check_endpoint
 from backend.service import RunService
 
 REQUIRED = {
-    "id", "label", "category", "base_url", "default_model", "tier", "auth", "private",
+    "id", "label", "category", "base_url", "default_model", "models", "tier", "auth", "private",
     "api_style", "flow", "risk", "note",
 }
 
@@ -43,6 +43,22 @@ def test_core_ids_present_and_custom_escape_hatch_exists():
     assert {"claude-code", "github-copilot", "codex", "cursor"} <= ids  # oauth sign-in
     assert {"ollama", "9router", "antigravity"} <= ids  # local & private
     assert {"openai-compat", "anthropic-compat"} <= ids  # custom escape hatches
+
+
+def test_model_suggestions_are_wellformed():
+    for p in PROVIDER_TYPES:
+        assert isinstance(p["models"], list)
+        assert all(isinstance(m, str) and m for m in p["models"]), p["id"]
+        # When suggestions exist, the default model is one of them.
+        if p["models"] and p["default_model"]:
+            assert p["default_model"] in p["models"], p["id"]
+
+
+def test_antigravity_matches_the_manager_proxy():
+    ag = next(p for p in PROVIDER_TYPES if p["id"] == "antigravity")
+    assert ag["base_url"] == "http://localhost:8045/v1"  # Antigravity-Manager default port
+    assert ag["auth"] == "none" and ag["private"] is True
+    assert {"gemini-3-pro-high", "claude-sonnet-4-6", "gpt-oss-120b-medium"} <= set(ag["models"])
 
 
 def test_oauth_providers_declare_a_flow_and_apikey_providers_do_not():

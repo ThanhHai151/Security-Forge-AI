@@ -17,9 +17,10 @@ import json
 import urllib.parse
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from ai_framework.tools.base import ToolContext, require_authorized
+from ai_framework.tools.session import session_of
 
 _TIMEOUT = 10
 _MAX_BODY = 4096
@@ -71,7 +72,7 @@ class HttpRequestTool:
         data = body.encode("utf-8") if isinstance(body, str) and body else None
         req = Request(url, data=data, headers=headers, method=method)  # noqa: S310 - gated
         try:
-            with urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310 - host gated above
+            with session_of(ctx).open(req, _TIMEOUT) as resp:  # session: cookies/proxy/UA
                 snippet = resp.read(_MAX_BODY).decode("utf-8", "replace")
                 return (
                     f"HTTP {resp.status} {method} {url}\n{_headers_text(resp.headers)}\n\n{snippet}"
@@ -102,7 +103,7 @@ class InspectHeadersTool:
         url = args["url"]
         require_authorized(url, ctx)
         req = Request(url, method="GET")  # noqa: S310 - gated
-        with urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310 - host gated above
+        with session_of(ctx).open(req, _TIMEOUT) as resp:  # session: cookies/proxy/UA
             headers = {k.lower(): v for k, v in resp.headers.items()}
             status = resp.status
         present = [h for h in _SECURITY_HEADERS if h in headers]
@@ -141,11 +142,12 @@ class RobotsSitemapTool:
         require_authorized(base, ctx)
         parts = urllib.parse.urlsplit(base)
         root = f"{parts.scheme}://{parts.netloc}"
+        sess = session_of(ctx)
         out: list[str] = []
         for name in ("robots.txt", "sitemap.xml"):
             target = f"{root}/{name}"
             try:
-                with urlopen(target, timeout=_TIMEOUT) as resp:  # noqa: S310 - host gated
+                with sess.open(target, _TIMEOUT) as resp:  # session: cookies/proxy/UA
                     text = resp.read(_MAX_BODY).decode("utf-8", "replace")
                     out.append(f"=== {target} (HTTP {resp.status}) ===\n{text}")
             except (HTTPError, URLError) as exc:

@@ -11,6 +11,7 @@
  *   #/vuln             → vuln search (catalog + CVE lookup)
  *   #/defense          → defense (codebase review)
  *   #/ai               → AI agent console
+ *   #/auto             → Auto-Pentest terminal (continuous campaign)
  *   #/router           → Providers (AI connection pool)
  *   #/<slug>           → back-compat: opens that doc under /docs
  */
@@ -32,6 +33,7 @@ export function parseRoute(hash) {
   if (head === "vuln") return { section: "vuln", slug: "" };
   if (head === "defense") return { section: "defense", slug: "" };
   if (head === "ai") return { section: "ai", slug: "" };
+  if (head === "auto") return { section: "auto", slug: "" };
   if (head === "router") return { section: "router", slug: "" };
 
   // Back-compat: a bare known slug (`#/sql_injection`) opens that doc.

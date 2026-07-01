@@ -53,10 +53,14 @@ def render_markdown(findings: list[Finding], *, target: str = "", goal: str = ""
         lines.append("_No findings recorded._")
         return "\n".join(lines)
     for i, f in enumerate(ranked, 1):
-        lines.append(f"### {i}. {f.title} — {f.severity.name.upper()}")
+        badge = " ✅ verified" if f.verified else " ⚠️ unverified"
+        lines.append(f"### {i}. {f.title} — {f.severity.name.upper()}{badge}")
         lines.append("")
         if f.detail:
             lines.append(f.detail)
+            lines.append("")
+        if f.verification:
+            lines.append(f"**Verification:** {f.verification}")
             lines.append("")
         if f.evidence:
             lines.append("**Evidence:**")

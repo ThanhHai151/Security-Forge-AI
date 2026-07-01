@@ -15,6 +15,9 @@ The two **project-wide overviews** live at the repository root, not here:
 - [`EXTERNAL_TOOLKITS.md`](EXTERNAL_TOOLKITS.md) — how the three upstream toolkits (hackingtool,
   Anthropic-Cybersecurity-Skills, Claude-BugHunter) fold into SecForge's pillars, and the safety
   boundary that keeps their catalogs knowledge-only.
+- [`AUTONOMOUS_PENTEST.md`](AUTONOMOUS_PENTEST.md) — the continuous ("infinite") campaign layer:
+  the `#/auto` terminal, the tried/untried coverage map, the between-phase continue/stop prompt,
+  the hold-for-approval gate on state-changing actions, and stealth defaults.
 - [`RED_TEAM_OPSEC.md`](RED_TEAM_OPSEC.md) ([Tiếng Việt](RED_TEAM_OPSEC.vi.md)) — red-team stealth / OPSEC
   & evasion tradecraft (source concealment, time/locale, traffic blending, host evasion, footprint
   management), each technique paired with its blue-team **detection counterpart** for the

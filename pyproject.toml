@@ -20,6 +20,9 @@ secforge = "backend.launcher:main"
 anthropic = ["anthropic>=0.40"]
 # Local, more-accurate token counting for Headroom (optional; heuristic used otherwise).
 headroom = ["tiktoken>=0.7"]
+# Headless-browser rendering for the browser_render tool (DOM XSS / SPA content). After
+# installing, run `playwright install chromium`. The tool degrades gracefully without it.
+browser = ["playwright>=1.40"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",

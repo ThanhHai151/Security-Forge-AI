@@ -19,6 +19,7 @@ import json
 from collections.abc import Callable
 from urllib.parse import urlparse
 
+from ai_framework.agent.assets import Asset, JsonlAssetStore
 from ai_framework.agent.contracts import (
     Budget,
     MemoryKind,
@@ -32,12 +33,14 @@ from ai_framework.agent.contracts import (
 from ai_framework.agent.guardrails import GuardrailController
 from ai_framework.agent.opsec import Pacer
 from ai_framework.agent.system import build_system_prompt, with_memory, with_plan
+from ai_framework.agent.verify import FindingVerifier
 from ai_framework.headroom import TurnRequest, fit
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
 from ai_framework.notes.contracts import Finding, Severity
 from ai_framework.notes.store import JsonlFindingStore
-from ai_framework.tools.base import ToolContext, ToolRegistry
+from ai_framework.tools.base import ToolContext, ToolRegistry, tool_is_mutating
+from ai_framework.tools.session import HttpSession
 
 # Top-K recalled into context when Headroom is off (Headroom uses budget.memory_recall_k).
 DEFAULT_RECALL_K = 5
@@ -54,10 +57,27 @@ def _touches_network(registry: ToolRegistry, name: str) -> bool:
         return False
 
 
+def _is_mutating(registry: ToolRegistry, name: str, args: dict) -> bool:
+    try:
+        return tool_is_mutating(registry.get(name), args)
+    except KeyError:
+        return False
+
+
 def _record_finding(
-    findings: JsonlFindingStore, run: Run, config: RunConfig, step: int, call: ToolCall
+    findings: JsonlFindingStore,
+    run: Run,
+    config: RunConfig,
+    step: int,
+    call: ToolCall,
+    ctx: ToolContext,
+    verifier: FindingVerifier | None,
 ) -> None:
     args = call.arguments
+    verified, verification = False, "unverified (no repro provided)"
+    repro = args.get("repro")
+    if isinstance(repro, dict) and repro and verifier is not None:
+        verified, verification = verifier.verify(repro, ctx)
     findings.write(
         Finding(
             run_id=run.id,
@@ -69,8 +89,30 @@ def _record_finding(
             evidence=str(args.get("evidence", "")),
             kb_ref=str(args.get("kb_ref", "")),
             tags=[str(t) for t in (args.get("tags") or [])],
+            verified=verified,
+            verification=verification,
         )
     )
+
+
+def _record_assets(assets: JsonlAssetStore, config: RunConfig, step: int, call: ToolCall) -> None:
+    args = call.arguments
+    rows = args.get("assets")
+    if not isinstance(rows, list):
+        rows = [args]
+    for r in rows:
+        value = str(r.get("value", "")).strip()
+        if not value:
+            continue
+        assets.write(
+            Asset(
+                target=config.target,
+                kind=Asset.normalize_kind(r.get("kind")),
+                value=value,
+                detail=str(r.get("detail", "")),
+                source=f"step {step}",
+            )
+        )
 
 
 def run_loop(
@@ -84,10 +126,20 @@ def run_loop(
     pacer: Pacer | None = None,
     findings: JsonlFindingStore | None = None,
     on_turn: Callable[[Run], None] | None = None,
+    hold_mutating: bool = False,
+    on_hold: Callable[[ToolCall, str], None] | None = None,
+    system_addon: str = "",
+    verifier: FindingVerifier | None = None,
+    assets: JsonlAssetStore | None = None,
 ) -> Run:
     tools = registry.schemas()
     base_system = build_system_prompt(config, tools)
-    ctx = ToolContext(authorized_targets=config.authorized_targets)
+    if system_addon:
+        base_system = f"{base_system}\n\n{system_addon}"
+    # One session per run: cookies established by `login` persist across every later tool, and
+    # the OPSEC proxy / User-Agent from the config are applied to all network traffic.
+    session = HttpSession(user_agent=config.user_agent, proxy=config.proxy)
+    ctx = ToolContext(authorized_targets=config.authorized_targets, session=session)
     target_host = urlparse(config.target).hostname or config.target
     # Accept a caller-owned Run so an async service can poll its transcript as it grows.
     if run is None:
@@ -127,6 +179,22 @@ def run_loop(
         for call in action.tool_calls:
             body = _body(call)
 
+            # Safety gate (campaign/autonomous mode): never auto-run a state-changing action.
+            # Hold it for the operator to approve instead. Recorded *before* the guardrail and
+            # anti-loop checks so a held call is not counted as a failure or a dead end — it
+            # stays approvable and re-proposable.
+            if hold_mutating and _is_mutating(registry, call.name, call.arguments):
+                if on_hold is not None:
+                    on_hold(call, action.reasoning)
+                results.append(
+                    ToolResult(
+                        call_id=call.id,
+                        log=f"held for manual approval ({call.name} {body})",
+                        ok=False,
+                    )
+                )
+                continue
+
             # Guardrail: refuse a call that has proven to be a dead end this run.
             if guardrail is not None:
                 decision = guardrail.check(call, registry)
@@ -159,7 +227,9 @@ def run_loop(
             if guardrail is not None:
                 guardrail.record(call, result.ok)
             if findings is not None and call.name == "note_finding" and result.ok:
-                _record_finding(findings, run, config, i, call)
+                _record_finding(findings, run, config, i, call, ctx, verifier)
+            if assets is not None and call.name == "record_asset" and result.ok:
+                _record_assets(assets, config, i, call)
 
             if memory:
                 kind = MemoryKind.target_fact if result.ok else MemoryKind.attempt

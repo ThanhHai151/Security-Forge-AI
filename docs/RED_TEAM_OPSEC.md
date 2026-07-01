@@ -1,7 +1,5 @@
 # Red-Team OPSEC, Stealth & Evasion — a tradecraft reference
 
-> **Language:** English · [Tiếng Việt](RED_TEAM_OPSEC.vi.md)
-
 > **What:** a conceptual reference on how a real red team stays covert during an
 > **authorized** engagement — concealing its source, blending into a target's network and
 > hosts, managing the artifacts it leaves behind, and avoiding self-attribution — and, for
@@ -103,41 +101,44 @@ when a defender denies them:
 | ↓ | Tools | Challenging |
 | Top | **TTPs** (tactics, techniques, procedures) | **Tough — can't easily abandon their methods** |
 
-The core lesson, and the honest framing of this user's own examples: **swapping a source IP
-("fake IP") is the cheapest possible move — cheap for the operator *and* cheap for the defender
-to defeat.** The durable contest happens near the *top* of the pyramid, at tool/behavior
+The core lesson, framed honestly: **swapping a source IP ("fake IP") is the cheapest possible
+move — cheap for the operator *and* cheap for the defender to defeat.** The durable contest happens near the *top* of the pyramid, at tool/behavior
 fingerprints (JA3/JARM, beaconing patterns) and TTPs. An operation that only rotates IPs and
 spoofs a timezone has changed nothing that actually hurts a competent defender.
 
 *Sources: attackiq.com/glossary/pyramid-of-pain-2, activecountermeasures.com "hunt what hurts",
 Bianco (2013).*
 
-### The evasion taxonomy — MITRE ATT&CK (the tactic split of 2025)
+### The evasion taxonomy — MITRE ATT&CK (the v19 Stealth / Defense-Impairment split)
 
-> **Framework change — CONFIRMED, not "drift" (verify current state on attack.mitre.org).**
-> The historic **Defense Evasion (TA0005)** tactic has been **split into two tactics** in
-> current ATT&CK (v19):
-> - **TA0005 is renamed "Stealth"** — pure *concealment* behaviors: avoid, obfuscate, or mimic
->   normal operations to stay indistinguishable from benign activity, **without** modifying
->   security controls.
-> - **TA0112 "Defense Impairment"** (new) — techniques that *weaken, disable, or tamper with*
->   security controls, pipelines, and tooling so defenders lose visibility.
+> **Framework change — CONFIRMED against primary MITRE sources (but re-check per technique).**
+> In **ATT&CK v19** (v19.0 released **2026-04-28**; v19.1 current) the historic **Defense
+> Evasion** tactic was **split into two tactics — in the Enterprise matrix only** (Mobile and
+> ICS keep Defense Evasion):
+> - **Stealth — keeps the identifier TA0005** — pure *concealment* behaviors: avoid, obfuscate,
+>   or mimic normal operations to stay indistinguishable from benign activity, **without**
+>   modifying security controls.
+> - **Defense Impairment — new identifier TA0112** — techniques that *weaken, disable, or tamper
+>   with* security controls, pipelines, and tooling so defenders lose visibility. (Some vendors
+>   still label this "Impair Defenses"; MITRE's tactic name is "Defense Impairment.")
 >
-> The reorganization is real: former **Impair Defenses (T1562)** and its sub-techniques
-> (.001 Disable/Modify Tools, .006 Indicator Blocking) were merged into new **T1685 "Disable or
-> Modify Tools"** under TA0112; **T1687 "Exploitation for Defense Impairment"** was added and the
-> old "Exploitation for Defense Evasion" renamed **T1211 "Exploitation for Stealth."** Any
-> detection/report still mapped to "TA0005 = evasion+impairment" or to T1562.001/.006 now has a
-> tactic-level blind spot. **The stable anchors are the technique IDs** (T1070, T1036, T1027,
-> T1218, T1055, T1497…), which persist across the rename; pre-2025 material calling TA0005
-> "Defense Evasion" with ~40 techniques reflects ≤ v18. Cite versioned URLs for historical taxonomy.
+> Consequence for tooling: any detection or report still mapped to "TA0005 = evasion + impairment"
+> now has a tactic-level blind spot. **The stable anchors are the technique IDs** (T1070, T1036,
+> T1027, T1218, T1055, T1497…), which persist across the rename. **Which specific former
+> Defense-Evasion sub-techniques landed under Stealth vs. Defense Impairment is not uniform — look
+> up each technique's tactic on attack.mitre.org rather than assuming** (cloud-log tampering
+> T1562.008 and the Impair-Defenses family are the natural Defense-Impairment candidates). Pre-2025
+> material calling TA0005 "Defense Evasion" with ~40 techniques reflects ≤ v18; cite versioned URLs
+> for historical taxonomy.
+> *(attack.mitre.org/resources/updates/updates-april-2026 · /tactics/TA0112 · /resources/versions)*
 
 Conceptually, the techniques an operator uses to stay hidden still fall into recognizable
 families — Masquerading (T1036), Indicator Removal (T1070), Obfuscated/Encrypted content
 (T1027), System Binary Proxy Execution (T1218), Process Injection (T1055),
 Virtualization/Sandbox Evasion (T1497), and the now-separated control-tampering set under
-TA0112. This document organizes them into **five operational layers (§2–§6)** and maps them
-back in the table in §8, independent of MITRE's tactic labeling.
+TA0112. This document organizes them into **five operational layers (§2–§6)**, adds identity/cloud and
+endpoint/delivery layers (§7–§8), and maps them all back in the table in §10, independent of
+MITRE's tactic labeling.
 
 ---
 
@@ -258,6 +259,14 @@ caught by them.
   Default tooling has a stable fingerprint, so an operator who rotates IPs/domains but never
   reshapes their TLS profile is still trivially clustered. This is why IP-only evasion (§2) is weak.
   (Salesforce Engineering "TLS fingerprinting with JA3 and JA3S")
+- **JA4/JA4+ is the current successor — and it repairs the evasion that broke JA3.** When Chrome
+  (2023) began **randomizing TLS extension order**, JA3's order-sensitive hash went unstable.
+  **JA4** fixes this by hashing the *sorted* extension list (a truncated SHA256, GREASE/SNI
+  filtered) and adds ALPN plus modern-protocol coverage (a `t`/`q` prefix distinguishing TCP from
+  QUIC) that JA3 lacked. **JA4+** is a whole family — JA4 (TLS client), JA4S (server), JA4H (HTTP),
+  JA4X (X.509 cert), JA4SSH (SSH), JA4L (latency), JA4T (TCP), JA4D (DHCP) — fingerprinting *how* a
+  tool behaves across layers, not just its TLS hello. Operator lesson, sharpened: reshaping one
+  layer is not enough. (blog.cloudflare.com/ja4-signals; github.com/FoxIO-LLC/ja4)
 - **Malleable C2 profiles** reshape an implant's HTTP(S)/DNS request/response — headers, URIs,
   body, even the handshake — to mimic benign services (e.g. look like Windows Update / Slack).
   *Default vs custom matters:* known/default profiles trip signatures; custom ones evade
@@ -289,6 +298,14 @@ caught by them.
   frameworks deploy uniformly, so e.g. **80% of live Trickbot C2s shared one JARM** with zero
   overlap in the Alexa top 1M. Caveats: not proof of malice (Burp Collaborator / generic Java
   match), and it can be **spoofed/randomized**. (Salesforce Engineering JARM)
+- **JA4X pins C2 even through certificate randomization.** FoxIO's published JA4+ mappings
+  fingerprint specific implants and C2 by cross-layer behavior — **Cobalt Strike, Sliver, IcedID,
+  and Qakbot** all have catalogued JA4+ signatures. Tellingly, **Sliver's ~400 lines of
+  TLS-certificate randomization still yield a *constant* JA4X**, because JA4X fingerprints *how* the
+  cert was generated, not its randomized contents — detection climbing the Pyramid of Pain from the
+  artifact (the cert) to the behavior (how it's minted). Cloudflare reports analyzing 15M+ unique
+  JA4s daily, feeding behavioral "JA4 Signals." (github.com/FoxIO-LLC/ja4 ja4plus-mapping.csv;
+  blog.foxio.io/ja4+-network-fingerprinting)
 - **Domain-fronting detection:** inspect HTTPS for **SNI ≠ Host mismatch** (ATT&CK M1020).
 - **DNS anomaly detection:** long high-entropy subdomains, NXDOMAIN bursts (DGA), query-timing
   beaconing, rare record-type spikes (TXT/NULL), clients using unauthorized external resolvers /
@@ -368,9 +385,9 @@ with any of them is now **Defense Impairment (TA0112)** — the set formerly cal
 
 ## 6. Artifact & footprint management ("erase footprint") — and why local erasure is futile
 
-This is the section the user's "erase footprint" most directly asks about — and the most
-important honest finding is that **against modern telemetry, erasing your local footprint mostly
-doesn't work, and *trying* often creates a louder signal than the footprint did.**
+This is what "erasing your footprint" most directly refers to — and the most important honest
+finding is that **against modern telemetry, erasing your local footprint mostly doesn't work,
+and *trying* often creates a louder signal than the footprint did.**
 
 ### The host-footprint inventory
 
@@ -435,7 +452,155 @@ a defender who understands this stops relying on host-local logs alone and forwa
 
 ---
 
-## 7. Threat-informed emulation & attribution
+## 7. Cloud, identity & Active Directory — where concealment moves up the stack
+
+The five layers above assume a network-and-host engagement. Modern intrusions increasingly live
+in the **identity and cloud control planes**, where "staying hidden" means blending into OAuth
+flows, token traffic, and API calls rather than packets and processes — and where the detection
+surface is *logs and sign-ins*, not Sysmon. (Mandiant M-Trends 2025: stolen credentials rose to
+the #2 initial-access vector, driven by infostealers.)
+
+### 7.1 Cloud logging evasion — Defense Impairment in the cloud (the *why*)
+
+- **Blind the recorder (ATT&CK T1562.008, Disable or Modify Cloud Logs).** Three documented moves,
+  escalating in subtlety:
+  - **Stop it** — `cloudtrail:StopLogging` (AWS) or a GCP log sink set `disabled=true` opens an
+    immediate visibility gap.
+  - **Make it unreadable** — repoint a CloudTrail trail at an attacker-controlled KMS key, then
+    revoke access: logs can no longer be encrypted, so they simply aren't written (GCP CMEK rekey
+    fails the same way without decrypt access to the current key).
+  - **Redirect it** — send trail/sink output to an attacker-owned bucket, which both removes it
+    from the defender's view *and* hands the operator continuous recon of the victim account.
+  (unit42.paloaltonetworks.com/cloud-logging-defense-evasion; attack.mitre.org/techniques/T1562/008)
+
+### Detection counterpart
+
+- The tamper is itself an event: watch for `StopLogging` / `UpdateTrail` / `logging.sinks.update`.
+  **Organization-level trails** member accounts can't alter, **append-only / immutable** sinks, and
+  Elastic's maintained *GCP Logging Sink Modification* rule catch it. As with host logs (§6), the
+  durable play is **forward first, out of the operator's reach** — the recorder isn't on the box.
+  Honest caveats: "stop logging" is **not** fully silent (CloudTrail surfaces a denied-bucket/config
+  error), and "permanently unreadable" depends on the attacker retaining or deleting the KMS key.
+
+### 7.2 Identity — token theft & OAuth consent phishing (the *why*)
+
+- **No malware required (ATT&CK T1528 Steal Application Access Token · T1550.001 Application Access
+  Token · T1566 Phishing).** Against Microsoft Entra ID an operator can abuse *legitimate
+  first-party client IDs* rather than dropping code:
+  - A **basic** grab uses a trusted public client (e.g. the **VS Code** client id) requesting the
+    Graph `.default` scope — yielding a short-lived access token with **no** refresh token
+    (`offline_access` + `.default` are mutually exclusive).
+  - An **advanced** variant abuses the **Microsoft Authentication Broker** client id against the
+    **Device Registration Service** to get a refresh token with `offline_access`, then exchanges it
+    (via ROADtools/roadtx) for a **Primary Refresh Token (PRT)** — the credential behind seamless
+    SSO — letting the operator ride existing sign-in state and *avoid re-prompting* MFA / Conditional
+    Access.
+  - **Nuance (not a footnote):** a PRT does **not** cryptographically defeat MFA — it **carries
+    forward the MFA claim satisfied during the phish**. Conditional Access requiring a *compliant /
+    hybrid-joined device* can still block the attacker-registered device. "Bypasses MFA" really
+    means "inherits an MFA already performed."
+  (elastic.co/security-labs/entra-id-oauth-phishing-detection; dirkjanm.io PRT phishing)
+
+### Detection counterpart
+
+- **Entra ID Protection** ships an **"Anomalous token" (offline) detection** — atypical token
+  characteristics, or a token used from an unfamiliar location — combining Entra + Microsoft 365
+  signals to catch *replay*. On Windows 10/11, **Defender for Endpoint** flags **suspicious PRT
+  access** and feeds the Entra risk score that drives Conditional Access (low-volume, high-value).
+- **It takes log *correlation*, not a single sign-in.** Microsoft's **Token theft playbook** and
+  Elastic show robust detection joins Azure sign-in + Entra audit + Microsoft Graph activity + M365
+  audit on `app_id`, `resource_id`, `incoming_token_type`, and especially
+  `token_protection_status_details.sign_in_session_status = "unbound"` — the tell of a token replayed
+  off its original device. (learn.microsoft.com/security/operations/token-theft-playbook;
+  learn.microsoft.com/entra/id-protection/concept-identity-protection-risks)
+
+### 7.3 Active Directory — Kerberos ticket tradecraft (the *why*)
+
+- **Forge the ticket, skip the guard (ATT&CK T1558 Steal or Forge Kerberos Tickets).** Golden
+  (forged TGT from the `krbtgt` hash), Silver (forged TGS for one service), and Diamond tickets let
+  an operator mint access. OPSEC-relevant point: a **Silver Ticket presents a forged TGS *directly to
+  the target service* with no Domain Controller round-trip**, so the DC-side events (e.g. 4769) that
+  Golden-Ticket hunts rely on **never fire** — detection must move to the host/service side.
+
+### Detection counterpart
+
+- **Hunt RC4 where AES should be (etype 0x17).** Windows has defaulted to AES since Vista / Server
+  2008, so RC4-encrypted Kerberos tickets are anomalous on a modern network — a cheap, durable
+  indicator. **Viability is rising:** Windows Server 2025 DCs stop issuing RC4 TGTs by default and
+  Microsoft is phasing RC4 out through 2026. **Caveat both ways:** a capable operator can forge *AES*
+  tickets (e.g. Mimikatz `/aes256`) to defeat the hunt, and legacy/unhardened networks still emit RC4
+  as a fallback (false positives).
+- Silver Tickets are **harder, not impossible**: PAC validation, host-side logon anomalies (4624/4634
+  without a matching DC 4768/4769), and service-account baselining still catch them. **Do not** rely
+  on the folk heuristic "a TGS with no preceding TGT = Golden Ticket" — that correlation was tested
+  and does not hold. (adsecurity.org/?p=1515; attack.mitre.org/techniques/T1558; Windows Server 2025
+  RC4 deprecation — learn.microsoft.com)
+
+---
+
+## 8. Endpoint depth & delivery — EDR internals, cross-OS, and initial access
+
+> **Coverage note.** This section is deliberately shorter and framed conceptually: it rests on fewer
+> independently-corroborated sources than §7, and the endpoint-evasion landscape moves fast. Treat
+> the specifics as *pointers to primary sources to verify*, not settled fact.
+
+### 8.1 EDR internals & tamper — Defense Impairment on the host (the *why*)
+
+- **Where EDR sees, and how operators try to go quiet.** Modern EDR draws telemetry from user-mode
+  API hooks, kernel callbacks, and **ETW** (§5). Concept-level evasions: **unhooking** (restoring a
+  clean `ntdll` to strip user-mode hooks), **direct/indirect syscalls** (invoking `Nt*` calls without
+  the hooked stubs), and **ETW/AMSI tampering** (patching the in-process provider so events never
+  leave the box). **BYOVD** (§5.2) is the kernel-level version. All map to **Defense Impairment
+  (TA0112)** / **Stealth (TA0005)** per the v19 split (§1).
+
+### Detection counterpart
+
+- **Watch the call stack, not just the call.** Elastic Security Labs' kernel-ETW **call-stack**
+  analysis catches in-memory threats (injected/unbacked code, tampered syscalls) by inspecting
+  *where* a call originated — user-mode-only evasions don't fool kernel-sourced telemetry. Pair with
+  the **"absence of expected telemetry"** principle (§5): a sensor going quiet is itself the alert.
+  (elastic.co/security-labs/doubling-down-etw-callstacks)
+- **Real-world stakes:** 2025 saw ransomware crews ship dedicated **EDR-killer** tooling (BYOVD-based)
+  as a pre-encryption stage — Defense Impairment operationalized. (expel.com Gentlemen-ransomware EDR analysis)
+
+### 8.2 Beyond Windows — macOS, Linux, containers (the *why*)
+
+- **macOS:** the guardrails are **TCC** (privacy/consent), **Gatekeeper + notarization**, and the
+  **`com.apple.quarantine`** attribute on downloaded files; EDR products consume the **Endpoint
+  Security Framework (ESF)**. macOS 15.4 (2025) **added TCC events to ESF**, widening defender
+  visibility into consent abuse. (outflank.nl EDR internals macOS/Linux; mjtsai.com macOS 15.4 TCC/ESF)
+- **Linux:** offense and defense increasingly meet at **eBPF** — the same in-kernel instrumentation
+  that powers **Falco** / modern sensors can be abused for stealth; classic tradecraft (`LD_PRELOAD`
+  hijack, `memfd_create` fileless execution) is countered by **auditd** and eBPF runtime sensors.
+- **Containers / Kubernetes:** the footprint shifts to **service-account token theft, RBAC abuse, and
+  container breakout**; runtime detection leans on **Falco** and eBPF sensors watching syscalls and
+  K8s audit logs.
+
+### 8.3 Initial access & delivery — and the controls that catch it (the *why*)
+
+- **Delivery trends.** **HTML smuggling (T1027.006)** assembles the payload in-browser from an HTML
+  attachment to slip past content filters; **ISO/IMG and LNK** files are favored because container
+  formats historically **stripped Mark-of-the-Web (MOTW)** provenance.
+- **The control that hurts delivery — MOTW (ATT&CK T1553.005, Subvert Trust Controls).** With MOTW,
+  Office opens a file in Protected View / blocks macros and SmartScreen inspects it; the tradecraft is
+  about *stripping or avoiding* MOTW, and the defense is ensuring it **propagates** (modern Windows now
+  applies MOTW to files extracted from mounted ISO/IMG) plus **ASR rules** blocking Office child
+  processes and script-borne executables (§5).
+  (microsoft.com HTML-smuggling analysis; attack.mitre.org/techniques/T1553/005)
+
+### 8.4 C2 infrastructure & framework fingerprinting
+
+- **Resilient infrastructure** reuses the redirector / CDN / aged-domain design of §2 and §4; takedown
+  and detection therefore target the *reusable* layer (JA4+/JARM server fingerprints, cert / passive-DNS
+  clustering) rather than the disposable front — the Pyramid of Pain (§1) again.
+- **Framework landscape.** **Cobalt Strike** is still heavily abused but is increasingly displaced in
+  reporting by open-source frameworks — **Sliver, Mythic, Havoc** — precisely because their defaults are
+  less signatured. The defender's edge is **cross-layer fingerprinting** (§4): JA4+ catches Cobalt Strike
+  and Sliver even through certificate randomization. (redcanary.com C2-frameworks trend; M-Trends 2026)
+
+---
+
+## 9. Threat-informed emulation & attribution
 
 Red teaming is at its most valuable when it **emulates a specific, relevant adversary** rather
 than showing off generic tricks — this tests whether the client can detect *the threats that
@@ -458,9 +623,9 @@ actually target them* (threat-informed defense).
 
 ---
 
-## 8. Technique → ATT&CK → detection quick map
+## 10. Technique → ATT&CK → detection quick map
 
-*(Technique IDs are the stable anchors; tactic labels reflect the 2025 Stealth / Defense-Impairment split — see §1.)*
+*(Technique IDs are the stable anchors; tactic labels reflect the v19 Stealth / Defense-Impairment split — see §1.)*
 
 | Operator goal | Layer | ATT&CK | Primary detection signal |
 |---------------|-------|--------|--------------------------|
@@ -476,30 +641,38 @@ actually target them* (threat-informed defense).
 | Fileless / in-memory | Host | T1027, T1055, T1564 | AMSI, EDR injection telemetry, Volatility malfind |
 | Impair defenses (AMSI/ETW/EDR) | Host | **T1685 / TA0112** (was T1562) | ETW EID 12, Sysmon EID 16/4, absence-of-telemetry, driver blocklist |
 | Remove indicators | Footprint | T1070 (.001/.006) | Event ID 1102/104 forwarding, SIEM immutability, $MFT/USN journal |
+| Disable cloud logging | Cloud | T1562.008 | Config-change events, org-trails, immutable sinks, sink-modification rules |
+| Steal/replay OAuth token (PRT) | Identity | T1528, T1550.001, T1566 | Entra "Anomalous token", MDE PRT-access, `unbound`-session multi-log correlation |
+| Forge Kerberos ticket | Identity/AD | T1558 | RC4 (etype 0x17) hunting, PAC validation, host-side 4624/4634 anomalies |
+| Tamper EDR / ETW / AMSI | Host | **T1562 / TA0112** | Kernel-ETW call-stack analysis, absence-of-telemetry, driver blocklist (HVCI) |
+| HTML smuggling / MOTW bypass | Delivery | T1027.006, T1553.005 | MOTW propagation, SmartScreen, ASR rules, Protected View |
+| JA3-evading TLS / C2 fingerprint | Traffic | T1071, T1573 | JA4/JA4+ (sorted-extension hash), JA4X on C2 (Cobalt Strike/Sliver) |
 
 ---
 
-## 9. How this maps into SecForge
+## 11. How this maps into SecForge
 
 - **For the offensive agent ([`ai_framework/`](../ai_framework/README.md)):** §0–§1 are compiled
   into standing rules in the [system prompt](../ai_framework/agent/system.py) — authorization-first,
   prefer the least-noisy action that still proves the point, document every action, stay in scope,
   and don't waste effort on local artifact-destruction. When an engagement needs a specific
-  technique, the agent recalls the relevant §2–§6 principle and the [KB corpus](KNOWLEDGE_BASE.md).
+  technique, the agent recalls the relevant §2–§8 principle and the [KB corpus](KNOWLEDGE_BASE.md).
 - **For the defensive pillar ([`defense/`](../defense/README.md)):** the *detection counterpart*
-  of each section is the checklist for "would this target see the attack?" — TLS/JA3 visibility,
-  process telemetry (Sysmon), log forwarding/SIEM immutability, ETW/AMSI tamper monitoring, DNS
-  anomaly monitoring, and impossible-travel blind spots.
+  of each section is the checklist for "would this target see the attack?" — TLS/JA4+ visibility,
+  process telemetry (Sysmon) and kernel-ETW call-stack analysis, log forwarding/SIEM immutability,
+  ETW/AMSI tamper monitoring, DNS anomaly monitoring, impossible-travel blind spots, plus the
+  identity/cloud surface: Entra token/sign-in anomaly detection, cloud-log integrity (org-trails +
+  immutable sinks), and Kerberos RC4/PAC anomaly hunting.
 - **For the knowledge base:** the [`vuln_search/catalog/`](../vuln_search/catalog/INDEX.md)
   cards cover *what* to exploit; this file covers *how to operate covertly and how that's caught* —
   a natural companion that pairs each attack with its detection.
 
 ---
 
-## 10. References
+## 12. References
 
 Grouped by section; all are public, authoritative sources. Items whose viability or taxonomy has
-changed, or which are secondary/uncertain, are flagged in §0–§6 and in the verification note below.
+changed, or which are secondary/uncertain, are flagged inline (§0–§8) and in the verification note below.
 
 **Standards, authorization & OPSEC doctrine**
 - NIST SP 800-115 — https://csrc.nist.gov/pubs/sp/800/115/final ·
@@ -512,10 +685,11 @@ changed, or which are secondary/uncertain, are flagged in §0–§6 and in the v
   DoD CDSE — https://www.cdse.edu/Portals/124/Documents/student-guides/GS130-guide.pdf ·
   DTIC OPSEC guide — https://apps.dtic.mil/sti/pdfs/AD1038572.pdf
 
-**MITRE ATT&CK (note the 2025 Stealth / Defense-Impairment split)**
+**MITRE ATT&CK (note the v19 Stealth / Defense-Impairment split, Enterprise-only)**
+- v19 release notes (2026-04-28) — https://attack.mitre.org/resources/updates/updates-april-2026/ ·
+  version history — https://attack.mitre.org/resources/versions/ · changelog — https://attack.mitre.org/resources/changelog.html
 - Stealth (TA0005, current) — https://attack.mitre.org/tactics/TA0005/ ·
   Defense Impairment (TA0112, new) — https://attack.mitre.org/tactics/TA0112/ ·
-  T1685 Disable or Modify Tools — https://attack.mitre.org/techniques/T1685/ ·
   legacy Defense Evasion (v15, pre-split) — https://attack.mitre.org/versions/v15/tactics/TA0005/ ·
   v19 split explainer — https://medium.com/mitre-attack/att-ck-v19-the-defense-evasion-split-ics-sub-techniques-new-ai-social-engineering-coverage-ff329cb65d66
 - Techniques: T1090 (+.002/.003/.004), T1071(+.004), T1573, T1568(.002), T1583/T1584/T1608,
@@ -577,14 +751,53 @@ changed, or which are secondary/uncertain, are flagged in §0–§6 and in the v
   https://www.cyberengage.org/post/volatility-plugins-plugin-window-malfind-let-s-talk-about-it ·
   USN Journal / NTFS forensics — https://andreafortuna.org/2025/09/06/usn-journal/ · https://www.unjaena.com/en/blog/windows-artifact-guide
 
+**TLS fingerprint successors & beaconing (JA4/JA4+, RITA) — §4**
+- Cloudflare "JA4 Signals" — https://blog.cloudflare.com/ja4-signals/ ·
+  FoxIO JA4+ — https://github.com/FoxIO-LLC/ja4 · JA4+ mapping CSV — https://raw.githubusercontent.com/FoxIO-LLC/ja4/main/ja4plus-mapping.csv ·
+  JA4+ blog (John Althouse) — https://blog.foxio.io/ja4+-network-fingerprinting
+- RITA v5 (ActiveCM) — https://github.com/activecm/rita · beaconing lab — https://activecm.github.io/threat-hunting-labs/beacons/ ·
+  BHIS "Detecting Malware Beacons with Zeek and RITA" — https://www.blackhillsinfosec.com/detecting-malware-beacons-with-zeek-and-rita/
+
+**Cloud / identity / Active Directory — §7**
+- Unit 42 "Cloud Logging Defense Evasion" — https://unit42.paloaltonetworks.com/cloud-logging-defense-evasion/ ·
+  MITRE T1562.008 — https://attack.mitre.org/techniques/T1562/008/ ·
+  Elastic GCP Logging Sink Modification rule — https://www.elastic.co/guide/en/security/current/gcp-logging-sink-modification.html
+- Microsoft Token theft playbook — https://learn.microsoft.com/en-us/security/operations/token-theft-playbook ·
+  Entra ID Protection risks — https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks ·
+  Protecting Entra tokens — https://learn.microsoft.com/en-us/entra/identity/devices/protecting-tokens-microsoft-entra-id
+- Elastic Security Labs "Entra ID OAuth phishing detection" — https://www.elastic.co/security-labs/entra-id-oauth-phishing-detection ·
+  Dirk-jan Mollema "Phishing for Entra PRTs" — https://dirkjanm.io/phishing-for-microsoft-entra-primary-refresh-tokens/
+- adsecurity.org Kerberos (Sean Metcalf) — https://adsecurity.org/?p=1515 · MITRE T1558 Steal/Forge Kerberos Tickets — https://attack.mitre.org/techniques/T1558/
+
+**Endpoint depth & delivery — §8**
+- Elastic Security Labs "Detecting In-Memory Threats with Kernel ETW Call Stacks" — https://www.elastic.co/security-labs/doubling-down-etw-callstacks ·
+  Outflank "EDR internals for macOS and Linux" — https://www.outflank.nl/blog/2024/06/03/edr-internals-macos-linux/ ·
+  macOS 15.4 adds TCC events to ESF — https://mjtsai.com/blog/2025/03/28/macos-15-4-adds-tcc-events-to-endpoint-security/
+- Microsoft "HTML smuggling surges" — https://www.microsoft.com/en-us/security/blog/2021/11/11/html-smuggling-surges-highly-evasive-loader-technique-increasingly-used-in-banking-malware-targeted-attacks/ ·
+  MITRE T1553.005 Mark-of-the-Web Bypass — https://attack.mitre.org/techniques/T1553/005/
+- Red Canary C2-framework trends — https://redcanary.com/threat-detection-report/trends/c2-frameworks/ ·
+  Mandiant M-Trends 2025 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2025/ · M-Trends 2026 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026
+
 > **Verification note.** §2–§6 network/host claims are backed by direct multi-source fetches
-> (MITRE, Microsoft Learn, vendor detection-engineering blogs); §0–§1 authorization/OPSEC and §7
-> emulation are anchored to NIST SP 800-115, PTES, and the MITRE CTID library. Flagged
-> uncertainties: (a) the **ATT&CK 2025 tactic split** is confirmed live, but treat exact
-> release/edit dates as low-confidence — re-verify TA0005/TA0112/T1685 on attack.mitre.org;
+> (MITRE, Microsoft Learn, vendor detection-engineering blogs); §0–§1 authorization/OPSEC and §9
+> emulation are anchored to NIST SP 800-115, PTES, and the MITRE CTID library. The identity/cloud
+> material (§7) and the JA4/JA4+ additions (§4) come from a 2026 multi-source, adversarially
+> verified research pass (primary sources: MITRE, Microsoft Learn, Cloudflare/FoxIO, Elastic
+> Security Labs, Unit 42, adsecurity.org). Flagged uncertainties:
+> (a) the **ATT&CK v19 tactic split** is confirmed against primary MITRE sources (v19.0 released
+> 2026-04-28, v19.1 current; Enterprise-only), **but the per-technique reassignment** to Stealth
+> vs. Defense Impairment is not uniform — look up each technique's tactic on attack.mitre.org
+> rather than assuming;
 > (b) domain-fronting viability and impossible-travel VPN/cloud exclusions change over time —
-> re-verify per provider; (c) AMSI/ETW provider-internal event IDs (1101/1201), immutable-SIEM
-> specifics, BYOVD's exact sub-technique mapping, and the "80% of samples use T1055" figure are
-> secondary/single-sourced; (d) a few sources returned SSL/403 errors during research
-> (0xc0decafe PE-timestamps, Cobalt Strike JARM, the T1562 parent page) and were corroborated via
-> search-index excerpts against primary material.
+> re-verify per provider; RC4-Kerberos anomaly hunting is *strengthening* (Server 2025 / 2026 RC4
+> phase-out) but false-positives on legacy networks;
+> (c) **§8 (endpoint depth & delivery) rests on fewer independent corroborations than §7** and is
+> framed as pointers to primary sources; AMSI/ETW provider-internal event IDs (1101/1201),
+> immutable-SIEM specifics, BYOVD's exact sub-technique mapping, and the "80% of samples use T1055"
+> figure remain secondary/single-sourced;
+> (d) three researched claims were **tested and rejected — do not reintroduce them:** that JA4
+> defeats evasion by sorting *ciphers* (the load-bearing mechanism is *extension* sorting), the
+> folk heuristic "a TGS with no preceding TGT = Golden Ticket," and a mis-reading of the ATT&CK
+> versions page; (e) a few sources returned SSL/403 errors during earlier research (0xc0decafe
+> PE-timestamps, Cobalt Strike JARM, the T1562 parent page) and were corroborated via search-index
+> excerpts against primary material.

@@ -78,6 +78,9 @@ export default function TopNav({ section, locale, onLocale, theme, onTheme, t, o
             <NavLink href="#/ai" active={section === "ai"}>
               {t.navAi}
             </NavLink>
+            <NavLink href="#/auto" active={section === "auto"}>
+              {t.navAuto}
+            </NavLink>
             <NavLink href="#/router" active={section === "router"}>
               {t.navRouter}
             </NavLink>

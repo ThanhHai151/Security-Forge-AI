@@ -54,4 +54,9 @@ class Finding(BaseModel):
     evidence: str = ""
     kb_ref: str = ""
     tags: list[str] = Field(default_factory=list)
+    # Adversarial verification: a finding is only trustworthy once its repro has been replayed
+    # and confirmed. ``verified`` stays False until a verifier reproduces it; ``verification``
+    # holds the human-readable outcome (what was replayed and what came back).
+    verified: bool = False
+    verification: str = ""
     created_at: datetime = Field(default_factory=_now)
