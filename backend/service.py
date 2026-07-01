@@ -91,7 +91,7 @@ class RunService:
 
     @property
     def pillars(self) -> PlatformServices:
-        """Knowledge base, vuln search, defense, labs, and i18n — built once on first use."""
+        """Knowledge base, vuln search, defense, and i18n — built once on first use."""
         if self._pillars is None:
             from backend.pillars import PlatformServices
 

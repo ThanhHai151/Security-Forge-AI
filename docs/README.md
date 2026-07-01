@@ -33,5 +33,5 @@ All documents here are in **English** (project rule).
 
 **Status:** the Hermes + Headroom design ([`INTEGRATION_PLAN.md`](INTEGRATION_PLAN.md),
 [`HERMES_INTEGRATION_STEPS.md`](HERMES_INTEGRATION_STEPS.md)) is implemented; the remaining
-pillars (knowledge base, vuln search, defense, labs, i18n) are coded and wired into the
+pillars (knowledge base, vuln search, defense, router, i18n) are coded and wired into the
 backend/frontend. Each pillar's README carries its own module map and HTTP route.

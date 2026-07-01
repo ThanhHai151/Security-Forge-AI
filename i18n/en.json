@@ -4,7 +4,6 @@
   "nav.docs": "Docs",
   "nav.vuln": "Vuln Search",
   "nav.defense": "Defense",
-  "nav.labs": "Labs",
   "nav.ai": "AI",
   "nav.router": "Router",
 
@@ -43,17 +42,6 @@
   "defense.guidance": "How to fix",
   "defense.recheck": "Re-check",
   "defense.authNote": "For projects you own or are authorized to assess. Findings are proposals, not automatic changes.",
-
-  "labs.kicker": "Practice Range",
-  "labs.title": "Read → practise → automate.",
-  "labs.lead": "Sandboxed, intentionally-vulnerable targets — simulated against in-memory data, bound to localhost, on a separate port.",
-  "labs.disabled": "Labs are disabled by default. Enable with SECFORGE_LABS_ENABLED=1 and restart.",
-  "labs.solved": "Solved",
-  "labs.unsolved": "Not solved",
-  "labs.reset": "Reset",
-  "labs.open": "Open lab",
-  "labs.difficulty": "Difficulty",
-  "labs.kb": "Knowledge base",
 
   "common.loading": "Loading…",
   "common.error": "Something went wrong.",

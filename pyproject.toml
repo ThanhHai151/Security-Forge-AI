@@ -29,7 +29,7 @@ dev = [
 [tool.setuptools.packages.find]
 include = [
     "ai_framework*", "backend*", "knowledge_base*", "vuln_search*",
-    "defense*", "labs*", "i18n*",
+    "defense*", "i18n*",
 ]
 
 [tool.ruff]

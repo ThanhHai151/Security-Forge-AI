@@ -4,7 +4,6 @@
   "nav.docs": "Tài liệu",
   "nav.vuln": "Tìm lỗ hổng",
   "nav.defense": "Phòng thủ",
-  "nav.labs": "Phòng lab",
   "nav.ai": "AI",
   "nav.router": "Router",
 
@@ -43,17 +42,6 @@
   "defense.guidance": "Cách khắc phục",
   "defense.recheck": "Kiểm tra lại",
   "defense.authNote": "Chỉ cho dự án bạn sở hữu hoặc được ủy quyền đánh giá. Các phát hiện là đề xuất, không tự thay đổi mã.",
-
-  "labs.kicker": "Phòng luyện tập",
-  "labs.title": "Đọc → luyện → tự động hóa.",
-  "labs.lead": "Mục tiêu cố ý chứa lỗ hổng, được cô lập — mô phỏng trên dữ liệu trong bộ nhớ, chỉ bind localhost, ở cổng riêng.",
-  "labs.disabled": "Phòng lab tắt mặc định. Bật bằng SECFORGE_LABS_ENABLED=1 rồi khởi động lại.",
-  "labs.solved": "Đã giải",
-  "labs.unsolved": "Chưa giải",
-  "labs.reset": "Đặt lại",
-  "labs.open": "Mở lab",
-  "labs.difficulty": "Độ khó",
-  "labs.kb": "Cơ sở tri thức",
 
   "common.loading": "Đang tải…",
   "common.error": "Đã có lỗi xảy ra.",

@@ -7,8 +7,8 @@ app or Notion.
 > **Status:** the **Knowledge Base viewer** is implemented (React + Vite + Tailwind v4).
 > It reads the vulnerability dictionary from [`../vuln_search/catalog/`](../vuln_search/catalog/INDEX.md)
 > and renders it with category navigation, a per-page table of contents, syntax-highlighted
-> payloads, search, and an EN ⇄ VI toggle. The other pillar tabs (Agent Console, Defense,
-> Labs) are not built yet.
+> payloads, search, and an EN ⇄ VI toggle. Other pillar tabs — Agent Console, Defense, and
+> Router (the AI connection pool) — are wired to the backend API.
 
 ## Run it
 
@@ -64,5 +64,5 @@ src/
 
 - [`../vuln_search/`](../vuln_search/README.md) — the dictionary it renders (content source).
 - [`../i18n/`](../i18n/README.md) — UI string lookup and content-language selection.
-- [`../backend/`](../backend/README.md) — future tabs (Agent Console, Defense, Labs) will
+- [`../backend/`](../backend/README.md) — the Agent Console, Defense, and Router tabs
   fetch JSON from the API; the KB view is self-contained and needs no backend.

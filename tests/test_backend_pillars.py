@@ -1,4 +1,4 @@
-"""The HTTP API exposes the knowledge base, vuln search, defense, labs, and i18n."""
+"""The HTTP API exposes the knowledge base, vuln search, defense, and i18n."""
 
 from __future__ import annotations
 
@@ -26,11 +26,10 @@ def test_platform_services_kb_and_render():
     assert doc["toc"]
 
 
-def test_platform_services_vuln_and_labs_and_i18n():
+def test_platform_services_vuln_and_i18n():
     p = PlatformServices()
     vs = p.vuln_search("sql injection")
     assert vs["techniques"] and vs["techniques"][0]["slug"] == "sql_injection"
-    assert {la["slug"] for la in p.labs_list()["labs"]} >= {"idor", "reflected-xss"}
     i18n = p.i18n("vi")
     assert i18n["strings"]["nav.defense"] == "Phòng thủ"
     assert "en" in i18n["available"]
@@ -85,12 +84,11 @@ def test_http_kb_doc_404(api):
     assert exc.value.code == 404
 
 
-def test_http_vuln_search_and_labs_and_i18n(api):
+def test_http_vuln_search_and_i18n(api):
     vs = _get(f"{api}/vuln-search?q=ssrf")
     assert vs["techniques"][0]["slug"] == "ssrf"
     assert vs["online"] is False
-    assert _get(f"{api}/labs")["labs"]
-    assert _get(f"{api}/i18n/vi")["strings"]["nav.labs"] == "Phòng lab"
+    assert _get(f"{api}/i18n/vi")["strings"]["nav.defense"] == "Phòng thủ"
 
 
 def test_http_defense_review(api, tmp_path):

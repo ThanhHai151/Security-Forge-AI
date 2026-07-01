@@ -10,7 +10,6 @@
  *   #/pentest          → pentest tool catalog
  *   #/vuln             → vuln search (catalog + CVE lookup)
  *   #/defense          → defense (codebase review)
- *   #/labs             → sandboxed practice range
  *   #/ai               → AI agent console
  *   #/router           → Providers (AI connection pool)
  *   #/<slug>           → back-compat: opens that doc under /docs
@@ -32,7 +31,6 @@ export function parseRoute(hash) {
   if (head === "pentest") return { section: "pentest", slug: "" };
   if (head === "vuln") return { section: "vuln", slug: "" };
   if (head === "defense") return { section: "defense", slug: "" };
-  if (head === "labs") return { section: "labs", slug: "" };
   if (head === "ai") return { section: "ai", slug: "" };
   if (head === "router") return { section: "router", slug: "" };
 

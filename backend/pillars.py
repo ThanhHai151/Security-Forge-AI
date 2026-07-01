@@ -1,9 +1,8 @@
 """PlatformServices — the read surfaces the HTTP API exposes for the non-agent pillars.
 
-Wraps the knowledge base, vuln search, defense reviewer, labs registry, and i18n behind
-small JSON-returning methods so ``backend/app.py`` stays a thin router. Heavy objects (the
-indexed KB, the catalog) are built once and reused; the labs registry is created on demand so
-the vulnerable code is only instantiated when explicitly listed.
+Wraps the knowledge base, vuln search, defense reviewer, and i18n behind small JSON-returning
+methods so ``backend/app.py`` stays a thin router. Heavy objects (the indexed KB, the catalog)
+are built once and reused.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ from i18n.loader import available_locales, glossary, load_strings
 from knowledge_base.index import KnowledgeBase, repo_root
 from knowledge_base.render import render_markdown
 from knowledge_base.search import search, search_errors
-from labs.registry import LabRegistry, default_registry
 from vuln_search.catalog import load_catalog
 from vuln_search.search import VulnSearch
 
@@ -29,7 +27,6 @@ class PlatformServices:
         self.kb = KnowledgeBase(root).index()
         self._catalog = load_catalog(self.kb)
         self.vuln = VulnSearch(catalog=self._catalog)
-        self._labs: LabRegistry | None = None
 
     # ── knowledge base ──
     def kb_list(self, locale: str = "en") -> dict[str, Any]:
@@ -83,15 +80,6 @@ class PlatformServices:
             data["findings"] = data["findings"][:_MAX_DEFENSE_FINDINGS]
             data["truncated"] = True
         return data
-
-    # ── labs ──
-    def labs(self) -> LabRegistry:
-        if self._labs is None:
-            self._labs = default_registry()
-        return self._labs
-
-    def labs_list(self) -> dict[str, Any]:
-        return {"labs": [m.model_dump() for m in self.labs().list()]}
 
     # ── i18n ──
     def i18n(self, locale: str) -> dict[str, Any]:

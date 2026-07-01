@@ -484,9 +484,9 @@ hay không (phòng thủ theo tình báo mối đe dọa — threat-informed def
   mục kiểm tra cho "liệu mục tiêu này có thấy được cuộc tấn công không?" — khả năng thấy TLS/JA3, telemetry
   process (Sysmon), forwarding log/tính bất biến SIEM, giám sát can thiệp ETW/AMSI, giám sát bất thường DNS,
   và các điểm mù impossible-travel.
-- **Cho kho tri thức / labs:** các thẻ [`vuln_search/catalog/`](../vuln_search/catalog/INDEX.md) bao quát
+- **Cho kho tri thức:** các thẻ [`vuln_search/catalog/`](../vuln_search/catalog/INDEX.md) bao quát
   *cái gì* để khai thác; tệp này bao quát *cách vận hành bí mật và cách điều đó bị bắt* — một người bạn đồng
-  hành tự nhiên cho các bài tập [`labs/`](../labs/README.md) ghép một cuộc tấn công với phát hiện của nó.
+  hành tự nhiên ghép mỗi cuộc tấn công với phát hiện của nó.
 
 ---
 

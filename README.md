@@ -29,9 +29,8 @@ other `README.md` is scoped to the directory it lives in.
 | 6 | **Persistent memory (Hermes-style)** — findings, target facts, and lessons persist across steps and sessions. | [`ai_framework/memory/`](ai_framework/memory/README.md) |
 | 7 | **Self-research** — when the KB falls short, the agent researches (web + CVE) and folds the result back into its working knowledge. | [`ai_framework/research/`](ai_framework/research/README.md) |
 | 8 | **Structured note-taking** — captures findings, working payloads, and to-dos; reviewable in the UI and reusable by the agent. | [`ai_framework/notes/`](ai_framework/notes/README.md) |
-| 9 | **Sandboxed labs** — opt-in, PortSwigger-style practice targets. | [`labs/`](labs/README.md) |
-| 10 | **Red-team OPSEC reference** — stealth/evasion tradecraft paired with its blue-team detection counterpart. | [`docs/RED_TEAM_OPSEC.md`](docs/RED_TEAM_OPSEC.md) |
-| 11 | **Bilingual (EN ⇄ VI)** — UI strings and displayed content switch between English and Vietnamese. | [`i18n/`](i18n/README.md) |
+| 9 | **Red-team OPSEC reference** — stealth/evasion tradecraft paired with its blue-team detection counterpart. | [`docs/RED_TEAM_OPSEC.md`](docs/RED_TEAM_OPSEC.md) |
+| 10 | **Bilingual (EN ⇄ VI)** — UI strings and displayed content switch between English and Vietnamese. | [`i18n/`](i18n/README.md) |
 
 ---
 
@@ -94,12 +93,6 @@ Try the agent offline (no API key needed):
 make demo    # python -m ai_framework.demo --goal "Recon the target" --target http://localhost:8000 --backend offline
 ```
 
-Optional sandboxed practice labs:
-
-```bash
-make labs    # SECFORGE_LABS_ENABLED=1 python -m labs.server
-```
-
 > **Configuration:** copy `.env.example` to `.env` to pick a model backend. The default is
 > `offline` (heuristic, no key) so everything runs out of the box; set `anthropic` or
 > `openrouter` and add a key for live LLM calls.
@@ -118,7 +111,6 @@ make lint             # ruff check + mypy across all packages
 | Knowledge base | [`knowledge_base/`](knowledge_base/README.md) | `/kb`, `/kb/doc/{id}`, `/kb/search` | `tests/test_knowledge_base.py` |
 | Vuln search | [`vuln_search/`](vuln_search/README.md) | `/vuln-search` | `tests/test_vuln_search.py` |
 | Defense | [`defense/`](defense/README.md) | `/defense/review` | `tests/test_defense.py` |
-| Labs | [`labs/`](labs/README.md) | `/labs` (+ opt-in server) | `tests/test_labs.py` |
 | i18n | [`i18n/`](i18n/README.md) | `/i18n/{locale}` | `tests/test_i18n.py` |
 | AI framework | [`ai_framework/`](ai_framework/README.md) | `/runs`, `/memory`, `/accounts` | `tests/test_*` |
 
@@ -146,7 +138,6 @@ secforge/
 │   └── models/          pluggable LLM backends (Claude, offline)
 ├── vuln_search/         Find vulns from docs + auto-CVE on new errors
 ├── defense/             Review / harden any web project (defensive)
-├── labs/                Sandboxed practice targets (PortSwigger-style)
 ├── i18n/                EN/VI localization (cross-cutting)
 └── docs/                Deeper design notes & specifications
 ```
@@ -190,6 +181,3 @@ Details in [`i18n/`](i18n/README.md).
 | **Anthropic Cybersecurity Skills** | "Skills" — structured, on-demand security knowledge. | [`ai_framework/skills/`](ai_framework/skills/README.md) |
 | **NousResearch / hermes-agent** | The reasoning loop + persistent memory. | [`ai_framework/agent/`](ai_framework/agent/README.md), [`memory/`](ai_framework/memory/README.md) |
 | **Z4nzu / hackingtool** | A categorized catalog of runnable tools. | [`ai_framework/tools/`](ai_framework/tools/README.md) |
-
-Practice targets follow the **PortSwigger Web Security Academy** model — see
-[`labs/`](labs/README.md).

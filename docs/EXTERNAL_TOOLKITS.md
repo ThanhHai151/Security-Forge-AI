@@ -119,9 +119,9 @@ validate, and report a run. These map onto the loop and the notes/report pillars
    and the report shape.
 5. **evidence-hygiene + platform-aware reporting** — PII/cookie redaction rules and per-platform
    templates (CVSS/VRT) belong in [`notes/report.py`](../ai_framework/notes/report.py).
-6. **Eval harness** — the skills-on vs. skills-off ablation (against sandboxed targets like the
-   [`labs/`](../labs/README.md)) is how SecForge proves its skills actually raise solve-rate;
-   worth mirroring as a `tests/`- or `eval/`-level harness.
+6. **Eval harness** — the skills-on vs. skills-off ablation (against a sandboxed target of your
+   choice) is how SecForge proves its skills actually raise solve-rate; worth mirroring as a
+   `tests/`- or `eval/`-level harness.
 
 ### Scope alignment
 Claude-BugHunter deliberately excludes internal-AD, post-exploitation, and C2 (external-only
@@ -140,7 +140,7 @@ the excluded offensive tradecraft.
 | 4 | Generate the hackingtool JSON catalog (read-only) + a `recommend_tool` lookup | Recommendations without new execution surface |
 | 5 | Add the 7-Question validation Gate as an adversarial step before report | Kills weak/OOS findings early |
 | 6 | Fold evidence-hygiene + platform templates into `notes/report.py` | Report quality |
-| 7 | Stand up the skills-on/off eval harness against `labs/` | Proves the skills help |
+| 7 | Stand up the skills-on/off eval harness against a sandboxed target | Proves the skills help |
 
 ---
 

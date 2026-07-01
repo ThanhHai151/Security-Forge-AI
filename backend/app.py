@@ -37,7 +37,6 @@ API routes (with or without the ``/api`` prefix):
     GET    /kb/search?q=&mode=&locale= -> 200 {hits}             (mode=full|errors)
     GET    /vuln-search?q=&online=&locale= -> 200 {techniques, cves}
     POST   /defense/review     -> 200 <DefenseReport> | 400      body: {path}
-    GET    /labs               -> 200 {labs:[meta + solved]}     (metadata only)
     GET    /i18n/{locale}      -> 200 {locale, available, strings, glossary}
 
 Any non-API GET falls through to ``static_root`` (SPA: unknown paths return index.html).
@@ -237,7 +236,7 @@ def make_handler(
             if path == "/memory":
                 target = (parse_qs(parsed.query).get("target") or [""])[0]
                 return self._send(200, service.memory_summary(target))
-            # ── pillars (knowledge base / vuln search / labs / i18n) ──
+            # ── pillars (knowledge base / vuln search / i18n) ──
             query = parse_qs(parsed.query)
             locale = (query.get("locale") or ["en"])[0]
             if path == "/kb":
@@ -254,8 +253,6 @@ def make_handler(
                 q = (query.get("q") or [""])[0]
                 online = (query.get("online") or ["0"])[0] in {"1", "true", "yes"}
                 return self._send(200, service.pillars.vuln_search(q, online, locale))
-            if path == "/labs":
-                return self._send(200, service.pillars.labs_list())
             if path.startswith("/i18n/"):
                 return self._send(200, service.pillars.i18n(path.removeprefix("/i18n/")))
             if path == "/runs":

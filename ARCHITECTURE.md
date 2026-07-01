@@ -14,22 +14,22 @@ README is consistent with.
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ frontend/  — single-page console; one tab per pillar; EN/VI toggle             │
-│   Knowledge Base │ Vuln Search │ Agent Console │ Defense │ Labs                 │
+│   Knowledge Base │ Vuln Search │ Agent Console │ Defense │ Router               │
 └───────────────────────────────┬────────────────────────────────────────────────┘
                                  │ HTTP / JSON
 ┌───────────────────────────────▼────────────────────────────────────────────────┐
 │ backend/  — HTTP API + orchestration; serves the UI, mediates every module       │
-└───┬─────────────┬──────────────┬───────────────┬──────────────┬────────────────┘
-    │             │              │               │              │
-┌───▼──────┐ ┌────▼───────┐ ┌────▼─────────┐ ┌───▼────────┐ ┌───▼───────────────┐
-│knowledge_│ │vuln_search │ │ai_framework  │ │defense     │ │labs (separate      │
-│base      │ │            │ │(agent+skills+│ │            │ │localhost port,     │
-│          │ │            │ │ tools+memory+│ │            │ │sandboxed targets)  │
-│          │ │            │ │ research+    │ │            │ │                    │
-│          │ │            │ │ notes+models)│ │            │ │                    │
-└──────────┘ └────────────┘ └──────────────┘ └────────────┘ └────────────────────┘
-        ▲                                                          ▲
-        └────────────── i18n/ wraps every user-facing string ──────┘
+└───┬─────────────┬──────────────┬───────────────┬────────────────────────────────┘
+    │             │              │               │
+┌───▼──────┐ ┌────▼───────┐ ┌────▼─────────┐ ┌───▼────────┐
+│knowledge_│ │vuln_search │ │ai_framework  │ │defense     │
+│base      │ │            │ │(agent+skills+│ │            │
+│          │ │            │ │ tools+memory+│ │            │
+│          │ │            │ │ research+    │ │            │
+│          │ │            │ │ notes+models)│ │            │
+└──────────┘ └────────────┘ └──────────────┘ └────────────┘
+        ▲                                             ▲
+        └──────── i18n/ wraps every user-facing string ┘
 ```
 
 ---
@@ -55,10 +55,10 @@ when something is new/unknown — an automated CVE lookup. Feeds candidates to t
 The same skills/agent/model, pointed *inward*: review a web project for the catalogued
 vulnerability classes and produce hardening recommendations or fixes.
 
-### 5. Labs / Range (`labs/`)
-PortSwigger-style practice targets, **sandboxed** (simulated against in-memory data,
-bound to localhost, on a separate port). Read in the KB → practise in a lab → automate
-with the agent.
+### 5. Router (`ai_framework/router/`)
+The AI connection pool: many provider accounts (API-key or OAuth sign-in) behind one
+rotating backend with quota/ban-aware fallback. Every pillar that reasons — the agent,
+Defense review, VI translation — runs on whatever the Router selects.
 
 ---
 
@@ -138,9 +138,10 @@ lookup; content carries a language tag so the viewer can request the variant it 
 
 - **Configuration** — one source of truth for the KB root path, ports, the chosen model
   backend, and feature flags. Lives with the backend.
-- **Secrets** — never in files; the model API key comes from an environment variable.
-- **Safety** — the only intentionally vulnerable component is `labs/`, and it is
-  sandboxed (simulated data, localhost-only, separate port). Tools that act on real
-  targets must require explicit authorization of the target.
+- **Secrets** — never in files; model API keys come from an environment variable or the
+  account store (OAuth tokens included), and the API layer masks them.
+- **Safety** — tools that act on real targets must require explicit authorization of the
+  target; findings from Defense are proposals, not automatic changes.
 - **Extensibility = add a file.** New skill → a skill manifest in `skills/`. New tool →
-  an entry in `tools/`. New lab → a module in `labs/`. The platform discovers them.
+  an entry in `tools/`. New provider → a preset in `backend/providers.py`. The platform
+  discovers them.

@@ -32,7 +32,6 @@ export const STRINGS = {
     navPentest: "Pentest",
     navVuln: "Vuln",
     navDefense: "Defense",
-    navLabs: "Labs",
     navAi: "AI",
     navRouter: "Providers",
 
@@ -72,19 +71,6 @@ export const STRINGS = {
     defFindings: "Findings",
     defAuthNote:
       "For projects you own or are authorized to assess. Findings are proposals, not automatic changes.",
-
-    // ── Labs ──
-    labsKicker: "Practice Range",
-    labsTitle: "Read → practise → automate.",
-    labsLead:
-      "Sandboxed, intentionally-vulnerable targets — simulated against in-memory data, bound to localhost, on a separate port.",
-    labsDisabledNote:
-      "Labs run in a separate, opt-in process. Enable with SECFORGE_LABS_ENABLED=1 and run `make labs` (port 61023).",
-    labsSolved: "Solved",
-    labsUnsolved: "Not solved",
-    labsKb: "Knowledge base",
-    labsDifficulty: "Difficulty",
-    labsEmpty: "No labs registered.",
 
     // ── Dashboard (profile) ──
     profileKicker: "Profile",
@@ -280,7 +266,6 @@ export const STRINGS = {
     navPentest: "Pentest",
     navVuln: "Lỗ hổng",
     navDefense: "Phòng thủ",
-    navLabs: "Lab",
     navAi: "AI",
     navRouter: "Nhà cung cấp",
 
@@ -320,19 +305,6 @@ export const STRINGS = {
     defFindings: "Phát hiện",
     defAuthNote:
       "Chỉ cho dự án bạn sở hữu hoặc được ủy quyền đánh giá. Các phát hiện là đề xuất, không tự thay đổi mã.",
-
-    // ── Labs ──
-    labsKicker: "Phòng luyện tập",
-    labsTitle: "Đọc → luyện → tự động hóa.",
-    labsLead:
-      "Mục tiêu cố ý chứa lỗ hổng, được cô lập — mô phỏng trên dữ liệu trong bộ nhớ, chỉ bind localhost, ở cổng riêng.",
-    labsDisabledNote:
-      "Lab chạy ở tiến trình riêng, phải bật. Đặt SECFORGE_LABS_ENABLED=1 rồi chạy `make labs` (cổng 61023).",
-    labsSolved: "Đã giải",
-    labsUnsolved: "Chưa giải",
-    labsKb: "Cơ sở tri thức",
-    labsDifficulty: "Độ khó",
-    labsEmpty: "Chưa đăng ký lab nào.",
 
     // ── Dashboard (profile) ──
     profileKicker: "Hồ sơ",

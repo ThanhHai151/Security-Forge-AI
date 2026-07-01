@@ -11,7 +11,6 @@ import AiAgent from "./components/AiAgent";
 import Router from "./components/Router";
 import VulnSearch from "./components/VulnSearch";
 import Defense from "./components/Defense";
-import Labs from "./components/Labs";
 
 import { categories, bySlug, stats, docFor } from "./content/catalog";
 import { renderDoc } from "./lib/markdown";
@@ -164,12 +163,6 @@ export default function App() {
       {section === "defense" && (
         <main className="pt-[64px]">
           <Defense t={t} />
-        </main>
-      )}
-
-      {section === "labs" && (
-        <main className="pt-[64px]">
-          <Labs t={t} onOpenDoc={openDoc} />
         </main>
       )}
 

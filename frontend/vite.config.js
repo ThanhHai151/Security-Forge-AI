@@ -15,7 +15,7 @@ export default defineConfig({
     port: FRONTEND_PORT,
     strictPort: true,
     fs: { allow: [".."] },
-    // Future pillar tabs (Agent Console, Defense, Labs) call the backend API here.
+    // Pillar tabs (Agent Console, Defense, Router) call the backend API here.
     // `/api/runs` on the frontend → `/runs` on the backend.
     proxy: {
       "/api": {

@@ -490,10 +490,9 @@ actually target them* (threat-informed defense).
   of each section is the checklist for "would this target see the attack?" — TLS/JA3 visibility,
   process telemetry (Sysmon), log forwarding/SIEM immutability, ETW/AMSI tamper monitoring, DNS
   anomaly monitoring, and impossible-travel blind spots.
-- **For the knowledge base / labs:** the [`vuln_search/catalog/`](../vuln_search/catalog/INDEX.md)
+- **For the knowledge base:** the [`vuln_search/catalog/`](../vuln_search/catalog/INDEX.md)
   cards cover *what* to exploit; this file covers *how to operate covertly and how that's caught* —
-  a natural companion for [`labs/`](../labs/README.md) exercises that pair an attack with its
-  detection.
+  a natural companion that pairs each attack with its detection.
 
 ---
 

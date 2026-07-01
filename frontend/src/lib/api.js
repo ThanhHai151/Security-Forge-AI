@@ -62,6 +62,3 @@ export const vulnSearch = (q, { online = false, locale = "en" } = {}) =>
 
 // ── Defense (codebase review) ──
 export const reviewDefense = (path) => send("POST", "/defense/review", { path });
-
-// ── Labs (sandboxed practice targets; metadata only) ──
-export const getLabs = () => get("/labs");
