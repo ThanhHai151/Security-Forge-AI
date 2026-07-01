@@ -1,199 +1,82 @@
 # SecForge
 
-> A local security-research platform built on top of this CTF / PortSwigger Web
-> Security Academy knowledge base.
+**SecForge** is a local, agentic security-research platform. It turns a large corpus of
+web-security notes into a fast, searchable web app, and pairs it with an AI framework that
+can drive a penetration test, defend a codebase, and research new vulnerabilities — end to
+end, on your own machine.
+
+> **Status:** implemented and tested. All eight pillars ship working code and tests
+> (`pytest` green, `ruff` + `mypy` clean, the frontend builds).
 >
-> **This repository is now implemented.** All eight pillars have working code and tests
-> (`pytest` green; `ruff` + `mypy` clean; the frontend builds). Each directory's `README.md`
-> describes its purpose and points at the modules that fulfil it.
->
-> All documentation is written in **English**. The *product itself* is designed to switch
-> smoothly between **English and Vietnamese** (see [Multi-language](#multi-language) and
-> [`i18n/`](i18n/README.md)).
->
-> `secforge` is a placeholder name — rename it freely.
+> **Authorized use only.** SecForge is for security research, CTFs, and testing systems you
+> own or are explicitly authorized to assess. The agent enforces an allow-listed target gate;
+> keep it that way.
 
-This file and [`ARCHITECTURE.md`](ARCHITECTURE.md) are the **two project-wide overview
-documents**. Every other `README.md` is scoped to the single directory it lives in.
+This file and [`ARCHITECTURE.md`](ARCHITECTURE.md) are the two project-wide overviews. Every
+other `README.md` is scoped to the directory it lives in.
 
 ---
 
-## Capabilities
+## Features
 
-What SecForge is meant to do, end to end:
-
-1. **Rich data display.** Present the repository's ~278 markdown notes far more readably
-   than raw `.md` — a web application with the feel of Notion: collapsible category
-   navigation, a table of contents per page, syntax-highlighted payloads, and search.
-   → [`frontend/`](frontend/README.md), [`knowledge_base/`](knowledge_base/README.md)
-
-2. **AI framework for the pentest process.** An agentic framework that drives a
-   penetration test the way a human would: pick a technique, run a tool, read the result,
-   decide the next move. → [`ai_framework/`](ai_framework/README.md)
-
-3. **Defend any web project.** Point SecForge at a web codebase and have it review for
-   the vulnerability classes catalogued here, then recommend (or generate) concrete
-   hardening — the defensive counterpart to the pentest framework.
-   → [`defense/`](defense/README.md)
-
-4. **Find vulnerabilities two ways.**
-   - From the **stored documentation** in this project (the indexed knowledge base), and
-   - by **automatically searching for CVEs** when a new or unfamiliar error/technology is
-     encountered. → [`vuln_search/`](vuln_search/README.md)
-
-5. **Log-driven next-step planning.** After each pentest step, feed the step's logs back
-   in; the agent reads them and **automatically produces the next execution plan**. This
-   closes the observe → reason → act → observe loop.
-   → [`ai_framework/agent/`](ai_framework/agent/README.md)
-
-6. **Persistent memory (Hermes-style).** The agent remembers findings, target facts, and
-   lessons across steps and across sessions, so context is not lost between runs.
-   → [`ai_framework/memory/`](ai_framework/memory/README.md)
-
-7. **Self-research.** When the knowledge base does not cover something, the agent can go
-   research it (web + CVE sources) and fold the result back into its working knowledge.
-   → [`ai_framework/research/`](ai_framework/research/README.md)
-
-8. **Note-taking.** Structured capture of findings, payloads that worked, and to-dos —
-   reviewable in the UI and reusable by the agent.
-   → [`ai_framework/notes/`](ai_framework/notes/README.md)
-
-9. **Multi-language (EN ⇄ VI).** A first-class concern, not an afterthought: UI strings
-   and displayed content can switch between English and Vietnamese.
-   → [`i18n/`](i18n/README.md)
+| # | Feature | Directory |
+|---|---------|-----------|
+| 1 | **Notion-like knowledge viewer** — renders ~278 markdown notes with collapsible category nav, per-page table of contents, syntax-highlighted payloads, and full-text search. | [`frontend/`](frontend/README.md), [`knowledge_base/`](knowledge_base/README.md) |
+| 2 | **AI pentest framework** — an agent that runs a test the way a human would: pick a technique, run a tool, read the result, decide the next move. | [`ai_framework/`](ai_framework/README.md) |
+| 3 | **Log-driven planning** — feed each step's logs back in and the agent produces the next execution plan, closing the observe → reason → act loop. | [`ai_framework/agent/`](ai_framework/agent/README.md) |
+| 4 | **Defensive review** — point SecForge at a web codebase and it reviews for the catalogued vulnerability classes, then recommends concrete hardening. | [`defense/`](defense/README.md) |
+| 5 | **Two-way vuln discovery** — search the indexed knowledge base, and auto-search public CVE sources when an unfamiliar error/technology appears. | [`vuln_search/`](vuln_search/README.md) |
+| 6 | **Persistent memory (Hermes-style)** — findings, target facts, and lessons persist across steps and sessions. | [`ai_framework/memory/`](ai_framework/memory/README.md) |
+| 7 | **Self-research** — when the KB falls short, the agent researches (web + CVE) and folds the result back into its working knowledge. | [`ai_framework/research/`](ai_framework/research/README.md) |
+| 8 | **Structured note-taking** — captures findings, working payloads, and to-dos; reviewable in the UI and reusable by the agent. | [`ai_framework/notes/`](ai_framework/notes/README.md) |
+| 9 | **Sandboxed labs** — opt-in, PortSwigger-style practice targets. | [`labs/`](labs/README.md) |
+| 10 | **Red-team OPSEC reference** — stealth/evasion tradecraft paired with its blue-team detection counterpart. | [`docs/RED_TEAM_OPSEC.md`](docs/RED_TEAM_OPSEC.md) |
+| 11 | **Bilingual (EN ⇄ VI)** — UI strings and displayed content switch between English and Vietnamese. | [`i18n/`](i18n/README.md) |
 
 ---
 
-## How the capabilities map to directories
+## Quick start
 
-| Capability                                   | Pillar              | Directory                                  |
-|----------------------------------------------|---------------------|--------------------------------------------|
-| Rich data display (web / Notion-like)        | Knowledge Base      | [`frontend/`](frontend/README.md), [`knowledge_base/`](knowledge_base/README.md) |
-| AI pentest framework + log-driven planning   | AI Framework        | [`ai_framework/`](ai_framework/README.md)  |
-| Memory · self-research · note-taking         | AI Framework        | [`ai_framework/memory`](ai_framework/memory/README.md), [`research`](ai_framework/research/README.md), [`notes`](ai_framework/notes/README.md) |
-| Web-project defense / hardening              | Defense             | [`defense/`](defense/README.md)            |
-| Doc-based + auto-CVE vulnerability finding   | Vuln Search         | [`vuln_search/`](vuln_search/README.md)    |
-| Sandboxed practice targets (PortSwigger-style)| Labs / Range       | [`labs/`](labs/README.md)                  |
-| EN ⇄ VI switching                            | Cross-cutting       | [`i18n/`](i18n/README.md)                  |
-| HTTP API tying it together                   | Backend             | [`backend/`](backend/README.md)            |
+**Prerequisites:** Python **3.11+**, Node.js **18+** (npm), and `make` (optional — the raw
+commands are shown alongside each target).
 
-The existing topic folders (`SQL/`, `XSS/`, `ssrf/`, `Troubleshooting_Guide/`, …) are the
-**content source**. SecForge reads them; it never modifies them.
-
----
-
-## Inspirations
-
-The brief named three projects; each shapes one part of the AI framework:
-
-| Reference project                  | What SecForge borrows                                | Directory                               |
-|------------------------------------|------------------------------------------------------|-----------------------------------------|
-| **Anthropic-Cybersecurity-Skills** | "Skills" — structured, on-demand security knowledge. | [`ai_framework/skills/`](ai_framework/skills/README.md) |
-| **NousResearch / hermes-agent**    | The reasoning loop + persistent memory.              | [`ai_framework/agent/`](ai_framework/agent/README.md), [`memory/`](ai_framework/memory/README.md) |
-| **Z4nzu / hackingtool**            | A categorised catalog of runnable tools.             | [`ai_framework/tools/`](ai_framework/tools/README.md) |
-
-Practice targets follow the **PortSwigger Web Security Academy** model — see
-[`labs/`](labs/README.md).
-
----
-
-## Directory map
-
-```
-secforge/
-├── README.md            ← overview #1 — capabilities (this file)
-├── ARCHITECTURE.md      ← overview #2 — structure & data flow
-├── frontend/            Pillar 1 — the viewer UI (web / Notion-like) + language toggle
-├── backend/             HTTP API & orchestration that serves the UI and drives modules
-├── knowledge_base/      Pillar 1 data — index & render the .md notes, error search
-├── ai_framework/        Pillar 2 — the AI pentest framework (umbrella)
-│   ├── agent/           reasoning loop + log-driven next-step planner
-│   ├── skills/          on-demand security knowledge (skill manifests)
-│   ├── tools/           runnable tool catalog (recon, http, injection, …)
-│   ├── memory/          persistent, cross-session memory
-│   ├── research/        self-research (web + CVE)
-│   ├── notes/           structured note-taking
-│   └── models/          pluggable LLM backends (Claude, offline)
-├── vuln_search/         Pillar 3 — find vulns from docs + auto-CVE on new errors
-├── defense/             Pillar 4 — protect / harden any web project (defensive)
-├── labs/                Pillar 5 — sandboxed practice targets (PortSwigger-style)
-├── i18n/                cross-cutting — EN/VI localization
-└── docs/                deeper design notes & specifications
-```
-
----
-
-## Multi-language
-
-- **Documentation is English-only.** Every `.md` in this skeleton stays in English so
-  there is one canonical source of truth.
-- **The product switches EN ⇄ VI.** Two distinct things are localized:
-  - **UI strings** (menus, buttons, labels) — from locale files, switched instantly.
-  - **Displayed content** (the knowledge notes, agent output) — English is the source;
-    Vietnamese is produced either from stored translations or on demand via the AI model.
-- The design keeps a clean separation between *content* and *presentation language* so a
-  toggle can re-render without reloading. Details in [`i18n/`](i18n/README.md).
-
----
-
-## Tech stack (languages per layer)
-
-The languages SecForge is built in, grouped by where they apply. The rule of thumb:
-**TypeScript on the front, Python as the primary backend/agent language, Rust for the
-hot paths**, with the usual data/config glue.
-
-### Frontend (`frontend/`)
-| Language | Role | Notes |
-|----------|------|-------|
-| **HTML** | Page structure | The viewer shell. |
-| **CSS** (+ Tailwind) | Styling | Utility-first; one design system. |
-| **TypeScript** (`.ts` / `.tsx`) | All UI logic | Write TS, not raw JS — it compiles to JS. |
-| JavaScript / `.mjs` | Build/config only | e.g. `vite.config.mjs`; minimal. |
-
-> Framework (not a language, but the choice): **React + Vite** (or Svelte). EN/VI toggle
-> lives here against [`i18n/`](i18n/README.md).
-
-### Backend & AI framework (`backend/`, `ai_framework/`, `defense/`, `vuln_search/`)
-| Language | Role | When |
-|----------|------|------|
-| **Python** | Primary backend, **the Hermes agent loop**, memory, models, skills, tools, research, the planned **Headroom** module | Default for everything agent/LLM/MCP — the ecosystem is Python-first. |
-| **Rust** | Performance-critical paths: fast tool runners, token counting, sandboxed lab targets, anything Python is too slow for | Drop down only for hot paths. |
-
-> The Hermes integration (this section's plan) and Headroom are implemented in **Python**;
-> see the model contract in [`ai_framework/models/`](ai_framework/models/README.md).
-
-### Data, config & ops (cross-cutting)
-| Language | Role |
-|----------|------|
-| **SQL** | Persistence for `knowledge_base/`, `vuln_search/`, `memory/` |
-| **Bash** | Scripts, automation, CTF tooling, deploy |
-| **YAML / TOML / JSON** | Config (`pyproject.toml`, `package.json`, CI, Docker) |
-| **Dockerfile** | Containerizing backend + labs |
-| **Markdown** | All docs (this skeleton) |
-
-### The minimal list to commit to
-```
-FE:  HTML, CSS (+Tailwind), TypeScript
-BE:  Python (primary)  ·  Rust (performance / hot paths)
-Ops: SQL, Bash, YAML/TOML/JSON, Docker, Markdown
-```
-Five languages you actually *learn* (TypeScript, Python, Rust, SQL, Bash); the rest is
-markup/config picked up as needed.
-
----
-
-## Status & how to run
-
-All pillars are implemented and tested.
+### 1. Install
 
 ```bash
 make install          # pip install -e ".[dev]"
-make test             # pytest  (offline; no API key needed)
-make lint             # ruff + mypy across all packages
-make demo             # the Hermes agent loop against a target (offline backend)
-make labs             # sandboxed practice range (opt-in; SECFORGE_LABS_ENABLED=1)
+```
 
-cd frontend && npm install && npm run dev:all   # Web UI + backend API together
+### 2. Run the app (web UI + backend API)
+
+```bash
+cd frontend
+npm install
+npm run dev:all       # starts Vite (web) and the Python API together
+```
+
+- Web UI: served by Vite (see the printed local URL, e.g. `http://127.0.0.1:5173`).
+- Backend API: `python -m backend.app` (run standalone via `npm run dev:backend`).
+
+### 3. Try the agent (offline, no API key)
+
+```bash
+make demo             # python -m ai_framework.demo --goal "Recon the target" \
+                      #   --target http://localhost:8000 --backend offline
+```
+
+### 4. Optional: sandboxed labs
+
+```bash
+make labs             # SECFORGE_LABS_ENABLED=1 python -m labs.server
+```
+
+---
+
+## Testing & quality
+
+```bash
+make test             # pytest — offline, no API key needed
+make lint             # ruff check + mypy across all packages
 ```
 
 | Pillar | Code | Backend route | Tests |
@@ -201,11 +84,78 @@ cd frontend && npm install && npm run dev:all   # Web UI + backend API together
 | Knowledge base | [`knowledge_base/`](knowledge_base/README.md) | `/kb`, `/kb/doc/{id}`, `/kb/search` | `tests/test_knowledge_base.py` |
 | Vuln search | [`vuln_search/`](vuln_search/README.md) | `/vuln-search` | `tests/test_vuln_search.py` |
 | Defense | [`defense/`](defense/README.md) | `/defense/review` | `tests/test_defense.py` |
-| Labs | [`labs/`](labs/README.md) | `/labs` (+ separate opt-in server) | `tests/test_labs.py` |
+| Labs | [`labs/`](labs/README.md) | `/labs` (+ opt-in server) | `tests/test_labs.py` |
 | i18n | [`i18n/`](i18n/README.md) | `/i18n/{locale}` | `tests/test_i18n.py` |
 | AI framework | [`ai_framework/`](ai_framework/README.md) | `/runs`, `/memory`, `/accounts` | `tests/test_*` |
 
-The build order followed: `knowledge_base` (shared reference) → `vuln_search` → `defense` →
-`labs` → `i18n`, each wired into `backend/` and `frontend/`.
-#   S e c u r i t y - F o r g e - A I  
- 
+---
+
+## Architecture
+
+SecForge is organized as pillars behind a single HTTP backend that serves the frontend and
+drives the agent modules. Full data flow lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+```
+secforge/
+├── README.md            ← overview #1 — features & how to run (this file)
+├── ARCHITECTURE.md      ← overview #2 — structure & data flow
+├── frontend/            Web viewer UI (React + Vite) + EN/VI language toggle
+├── backend/             HTTP API & orchestration serving the UI and modules
+├── knowledge_base/      Index & render the .md notes, error/full-text search
+├── ai_framework/        The AI pentest framework (umbrella)
+│   ├── agent/           reasoning loop + log-driven next-step planner
+│   ├── skills/          on-demand security knowledge (skill manifests)
+│   ├── tools/           runnable tool catalog (recon, http, injection, …)
+│   ├── memory/          persistent, cross-session memory
+│   ├── research/        self-research (web + CVE)
+│   ├── notes/           structured note-taking
+│   └── models/          pluggable LLM backends (Claude, offline)
+├── vuln_search/         Find vulns from docs + auto-CVE on new errors
+├── defense/             Review / harden any web project (defensive)
+├── labs/                Sandboxed practice targets (PortSwigger-style)
+├── i18n/                EN/VI localization (cross-cutting)
+└── docs/                Deeper design notes & specifications
+```
+
+---
+
+## Tech stack
+
+| Layer | Languages / tools |
+|-------|-------------------|
+| **Frontend** | React + Vite, TypeScript, Tailwind CSS |
+| **Backend & agent** | Python 3.11+ (primary); Rust for performance-critical hot paths |
+| **Data & config** | SQL, YAML / TOML / JSON, Dockerfile, Bash |
+
+The AI framework is Python-first (the ecosystem for agent/LLM/MCP work); Rust is reserved for
+hot paths such as fast tool runners and token counting. Pluggable model backends are defined
+in [`ai_framework/models/`](ai_framework/models/README.md), including an **offline** backend
+so tests and the demo run without an API key.
+
+---
+
+## Multi-language
+
+Localization is a first-class concern, split cleanly into two layers:
+
+- **Documentation is English-only** — one canonical source of truth for every `.md`.
+- **The product switches EN ⇄ VI at runtime:**
+  - **UI strings** (menus, buttons, labels) come from locale files and switch instantly.
+  - **Displayed content** (knowledge notes, agent output) is English at the source;
+    Vietnamese is served from stored translations or produced on demand by the model.
+
+Content and presentation language stay separated so a toggle can re-render without a reload.
+Details in [`i18n/`](i18n/README.md).
+
+---
+
+## Inspirations
+
+| Reference project | What SecForge borrows | Directory |
+|-------------------|-----------------------|-----------|
+| **Anthropic Cybersecurity Skills** | "Skills" — structured, on-demand security knowledge. | [`ai_framework/skills/`](ai_framework/skills/README.md) |
+| **NousResearch / hermes-agent** | The reasoning loop + persistent memory. | [`ai_framework/agent/`](ai_framework/agent/README.md), [`memory/`](ai_framework/memory/README.md) |
+| **Z4nzu / hackingtool** | A categorized catalog of runnable tools. | [`ai_framework/tools/`](ai_framework/tools/README.md) |
+
+Practice targets follow the **PortSwigger Web Security Academy** model — see
+[`labs/`](labs/README.md).
