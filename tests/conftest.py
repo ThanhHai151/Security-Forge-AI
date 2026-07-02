@@ -19,6 +19,16 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+@pytest.fixture(autouse=True)
+def _isolate_usage_store(tmp_path, monkeypatch) -> None:
+    """Point the default UsageStore path at a temp file for every test.
+
+    The RouterBackend persists per-account usage on each model call; when a test builds one
+    without injecting a UsageStore it would otherwise write ai_usage.json into the repo root.
+    """
+    monkeypatch.setenv("SECFORGE_USAGE", str(tmp_path / "ai_usage.json"))
+
+
 @pytest.fixture
 def mock_server() -> Iterator[str]:
     server = HTTPServer(("127.0.0.1", 0), _Handler)

@@ -20,7 +20,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
-from ai_framework.models.base import ActResponse
+from ai_framework.models.base import ActResponse, normalize_usage
 
 
 class HttpError(Exception):
@@ -79,6 +79,8 @@ class OpenAICompatBackend:
         self._max_tokens = max_tokens
         self._post = http_post or _urllib_post
         self._extra = extra_headers or {}
+        # Token usage from the most recent call, for the router's quota tracker (None until set).
+        self.last_usage: dict[str, int] | None = None
 
     def _headers(self) -> dict[str, str]:
         headers = {"X-Title": "SecForge", **self._extra}
@@ -136,6 +138,7 @@ class OpenAICompatBackend:
             "tools": self._tools(tools),
         }
         resp = self._post(self._url, payload, self._headers())
+        self.last_usage = normalize_usage(resp.get("usage"))
         message = resp["choices"][0]["message"]
         calls: list[ToolCall] = []
         for i, tc in enumerate(message.get("tool_calls") or []):
@@ -161,4 +164,5 @@ class OpenAICompatBackend:
         )
         payload = {"model": self._model, "max_tokens": self._max_tokens, "messages": messages}
         resp = self._post(self._url, payload, self._headers())
+        self.last_usage = normalize_usage(resp.get("usage"))
         return resp["choices"][0]["message"].get("content") or ""

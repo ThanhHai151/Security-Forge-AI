@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "dev:backend": "cd .. && python -m backend.app",
+    "dev:backend": "cd .. && python -m backend.devreload",
     "dev:all": "concurrently -n web,api -c cyan,magenta \"npm:dev\" \"npm:dev:backend\"",
     "build": "vite build",
     "preview": "vite preview"

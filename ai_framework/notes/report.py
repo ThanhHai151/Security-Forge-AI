@@ -7,8 +7,13 @@ heads the report so a reader sees the shape at a glance.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ai_framework.notes.contracts import Finding, Severity
 from ai_framework.notes.store import JsonlFindingStore
+
+if TYPE_CHECKING:
+    from ai_framework.notes.remediation import Remediator
 
 _ORDER = sorted(Severity, key=int, reverse=True)  # critical -> info
 
@@ -20,17 +25,30 @@ def _tally(findings: list[Finding]) -> dict[str, int]:
     return counts
 
 
-def render_json(findings: list[Finding], *, target: str = "") -> dict:
+def render_json(
+    findings: list[Finding], *, target: str = "", remediator: Remediator | None = None
+) -> dict:
     ranked = JsonlFindingStore.ranked(findings)
+    rows: list[dict] = []
+    for f in ranked:
+        row = f.model_dump(mode="json")
+        if remediator is not None:
+            slug, guidance = remediator.for_finding(f)
+            if slug:
+                row["remediation"] = {"kb_class": slug, "guidance": guidance}
+        rows.append(row)
     return {
         "target": target,
         "total": len(ranked),
         "by_severity": _tally(ranked),
-        "findings": [f.model_dump(mode="json") for f in ranked],
+        "findings": rows,
     }
 
 
-def render_markdown(findings: list[Finding], *, target: str = "", goal: str = "") -> str:
+def render_markdown(
+    findings: list[Finding], *, target: str = "", goal: str = "",
+    remediator: Remediator | None = None,
+) -> str:
     ranked = JsonlFindingStore.ranked(findings)
     tally = _tally(ranked)
     lines: list[str] = ["# Security Assessment Report", ""]
@@ -69,6 +87,13 @@ def render_markdown(findings: list[Finding], *, target: str = "", goal: str = ""
             lines.append(f.evidence)
             lines.append("```")
             lines.append("")
+        if remediator is not None:
+            slug, guidance = remediator.for_finding(f)
+            if guidance:
+                lines.append(f"**Remediation** (`{slug}`):")
+                lines.append("")
+                lines.append(guidance)
+                lines.append("")
         meta = []
         if f.target:
             meta.append(f"target `{f.target}`")

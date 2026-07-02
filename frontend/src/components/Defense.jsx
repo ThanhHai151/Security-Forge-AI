@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { ShieldCheck, CircleNotch, Warning, FileCode } from "@phosphor-icons/react";
+import { ShieldCheck, CircleNotch, Warning, FileCode, Package } from "@phosphor-icons/react";
 
-import { reviewDefense } from "../lib/api";
+import { scanDefense } from "../lib/api";
 
 const inputCls =
   "w-full bg-zinc-900/60 border border-white/[0.08] px-3 py-2.5 text-[14px] text-zinc-100 " +
@@ -12,19 +12,28 @@ const SEV = {
   high: "text-orange-400 border-orange-500/40",
   medium: "text-amber-400 border-amber-500/40",
   low: "text-zinc-400 border-white/[0.12]",
+  unknown: "text-zinc-400 border-white/[0.12]",
 };
 
 function sevLabel(t, sev) {
   return { critical: t.sevCritical, high: t.sevHigh, medium: t.sevMedium, low: t.sevLow }[sev] || sev;
 }
 
+function SevBadge({ sev, t }) {
+  return (
+    <span
+      className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 border ${SEV[sev] || SEV.low}`}
+    >
+      {sevLabel(t, sev)}
+    </span>
+  );
+}
+
 function FindingCard({ f, t }) {
   return (
     <div className="border border-white/[0.07] bg-zinc-900/30 p-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 border ${SEV[f.severity] || SEV.low}`}>
-          {sevLabel(t, f.severity)}
-        </span>
+        <SevBadge sev={f.severity} t={t} />
         <span className="text-[13px] font-semibold text-zinc-100">{f.title}</span>
         <span className="text-[11px] font-mono text-zinc-500 ml-auto">
           {f.file}:{f.line}
@@ -48,8 +57,48 @@ function FindingCard({ f, t }) {
   );
 }
 
+function DepCard({ d, t }) {
+  return (
+    <div className="border border-white/[0.07] bg-zinc-900/30 p-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <SevBadge sev={d.severity} t={t} />
+        <span className="text-[13px] font-semibold text-zinc-100 font-mono">
+          {d.name}@{d.version}
+        </span>
+        <span className="text-[11px] font-mono text-zinc-500 ml-auto">
+          {d.ecosystem} · {d.source}
+        </span>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {d.advisories.map((a) => (
+          <li key={a.id} className="text-[12px] text-zinc-400">
+            <a
+              href={a.reference}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-emerald-400/80 hover:text-emerald-300"
+            >
+              {a.id}
+            </a>
+            {a.summary ? ` — ${a.summary}` : ""}
+            {a.fixed && (
+              <span className="text-zinc-500">
+                {" "}
+                ({t.defFixedIn} {a.fixed})
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const order = ["critical", "high", "medium", "low", "unknown"];
+
 export default function Defense({ t }) {
   const [path, setPath] = useState("");
+  const [depsOnline, setDepsOnline] = useState(false);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -59,16 +108,17 @@ export default function Defense({ t }) {
     setLoading(true);
     setErr("");
     try {
-      setReport(await reviewDefense(path.trim()));
+      setReport(await scanDefense({ path: path.trim(), deps_online: depsOnline }));
     } catch (e) {
       setErr(e.message === "Failed to fetch" ? t.backendDown : String(e.message || e));
       setReport(null);
     } finally {
       setLoading(false);
     }
-  }, [path, t]);
+  }, [path, depsOnline, t]);
 
-  const order = ["critical", "high", "medium", "low"];
+  const code = report?.code_review;
+  const deps = report?.dependencies;
 
   return (
     <div className="page-enter mx-auto max-w-[980px] px-5 sm:px-8 lg:px-12 py-10">
@@ -104,6 +154,16 @@ export default function Defense({ t }) {
         </button>
       </div>
 
+      <label className="mt-3 flex items-center gap-2 text-[12px] text-zinc-400 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={depsOnline}
+          onChange={(e) => setDepsOnline(e.target.checked)}
+          className="accent-emerald-500"
+        />
+        {t.defCheckAdvisories}
+      </label>
+
       <p className="mt-3 flex items-start gap-2 text-[11.5px] leading-relaxed text-zinc-500">
         <Warning size={14} className="text-emerald-400/70 mt-0.5 shrink-0" />
         {t.defAuthNote}
@@ -115,40 +175,65 @@ export default function Defense({ t }) {
         </p>
       )}
 
-      {report && !err && (
+      {code && !err && (
         <div className="mt-8">
           <div className="flex items-center gap-2 flex-wrap mb-4">
             <FileCode size={15} className="text-zinc-500" />
+            <span className="text-[12px] font-semibold uppercase tracking-wider text-zinc-300">
+              {t.defCodeReview}
+            </span>
             <span className="text-[12.5px] text-zinc-400">
-              {report.files_scanned} {t.defFilesScanned}
+              · {code.files_scanned} {t.defFilesScanned}
             </span>
             {order
-              .filter((s) => report.by_severity?.[s])
+              .filter((s) => code.by_severity?.[s])
               .map((s) => (
                 <span
                   key={s}
                   className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 border ${SEV[s]}`}
                 >
-                  {report.by_severity[s]} {sevLabel(t, s)}
+                  {code.by_severity[s]} {sevLabel(t, s)}
                 </span>
               ))}
           </div>
 
-          {report.findings.length === 0 ? (
+          {code.findings.length === 0 ? (
             <p className="text-[13px] text-emerald-400/90 border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2.5">
               {t.defNoFindings}
             </p>
           ) : (
-            <>
-              <h2 className="text-[12px] font-semibold uppercase tracking-wider text-zinc-300 mb-3">
-                {t.defFindings} · {report.findings.length}
-              </h2>
-              <div className="space-y-2.5">
-                {report.findings.map((f, i) => (
-                  <FindingCard key={`${f.file}:${f.line}:${i}`} f={f} t={t} />
-                ))}
-              </div>
-            </>
+            <div className="space-y-2.5">
+              {code.findings.map((f, i) => (
+                <FindingCard key={`${f.file}:${f.line}:${i}`} f={f} t={t} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {deps && !err && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            <Package size={15} className="text-zinc-500" />
+            <span className="text-[12px] font-semibold uppercase tracking-wider text-zinc-300">
+              {t.defDeps}
+            </span>
+            <span className="text-[12.5px] text-zinc-400">
+              · {deps.dependencies_scanned} {t.defDepsScanned} · {deps.manifests_scanned}{" "}
+              {t.defManifests}
+            </span>
+          </div>
+
+          {deps.findings.length > 0 ? (
+            <div className="space-y-2.5">
+              {deps.findings.map((d) => (
+                <DepCard key={`${d.name}@${d.version}`} d={d} t={t} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-zinc-400 border border-white/[0.08] bg-zinc-900/30 px-3 py-2.5">
+              {deps.advisory_source === "osv" ? t.defNoVulnDeps : t.defDepsOffline}
+            </p>
           )}
         </div>
       )}

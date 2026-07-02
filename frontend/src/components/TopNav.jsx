@@ -1,5 +1,6 @@
 import { ShieldChevron, List, Translate, Sun, Moon } from "@phosphor-icons/react";
 import { LOCALES } from "../i18n/strings";
+import SettingsMenu from "./SettingsMenu";
 
 function NavLink({ href, active, children }) {
   return (
@@ -75,11 +76,8 @@ export default function TopNav({ section, locale, onLocale, theme, onTheme, t, o
             <NavLink href="#/defense" active={section === "defense"}>
               {t.navDefense}
             </NavLink>
-            <NavLink href="#/ai" active={section === "ai"}>
-              {t.navAi}
-            </NavLink>
-            <NavLink href="#/auto" active={section === "auto"}>
-              {t.navAuto}
+            <NavLink href="#/agent" active={section === "agent"}>
+              {t.navAgent}
             </NavLink>
             <NavLink href="#/router" active={section === "router"}>
               {t.navRouter}
@@ -115,6 +113,9 @@ export default function TopNav({ section, locale, onLocale, theme, onTheme, t, o
           >
             {isLight ? <Moon size={15} weight="fill" /> : <Sun size={15} weight="fill" />}
           </button>
+
+          {/* Account tools (quota / models / import-export) — a gear that opens a small menu. */}
+          <SettingsMenu t={t} />
         </div>
       </div>
     </header>

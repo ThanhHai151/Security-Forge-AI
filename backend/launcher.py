@@ -14,6 +14,7 @@ Non-interactive subcommands for scripts/CI:
     secforge web        # serve + open browser
     secforge tui        # Terminal UI
     secforge serve      # serve only (foreground)
+    secforge dev         # serve with auto-reload on backend/ai_framework edits
     secforge --help
 
 Host/port override via SECFORGE_API_HOST / SECFORGE_API_PORT.
@@ -83,24 +84,42 @@ def _run_tui() -> None:
     run_tui()
 
 
+def _start_dev(open_browser: bool) -> None:
+    """Serve with auto-reload: restart the server whenever backend/ai_framework code changes.
+
+    Runs the actual server (``secforge serve``) as a child process under
+    :mod:`backend.devreload` so a fresh restart re-imports every module cleanly — the same
+    guarantee a subprocess-based reloader like Flask's or Django's gives you.
+    """
+    from backend import devreload
+
+    if open_browser:
+        host, port = _host_port()
+        threading.Timer(1.2, lambda: webbrowser.open(f"http://{host}:{port}")).start()
+    devreload.run(["backend.launcher", "serve"])
+
+
 def _menu() -> None:
-    print("\n  SecForge")
-    print("  --------")
-    print("  1) Web UI       - start the server and open it in your browser")
-    print("  2) Terminal UI  - interactive CLI, no browser")
-    print("  3) Serve only   - start the server, don't open a browser")
-    print("  q) Quit\n")
-    try:
-        choice = input("  Select [1]: ").strip().lower() or "1"
-    except EOFError:
-        choice = "1"
+    from backend.ui import Choice, banner, select
+
+    banner("SecForge", "Autonomous pentest agent")
+    choices = [
+        Choice("1", "Web UI", "start the server and open it in your browser"),
+        Choice("2", "Terminal UI", "interactive CLI, no browser"),
+        Choice("3", "Serve only", "start the server, don't open a browser"),
+        Choice("4", "Dev (auto-reload)", "serve + restart on backend/ai_framework code changes"),
+        Choice("q", "Quit", ""),
+    ]
+    choice = select(choices, default="1")
     if choice in ("1", "web"):
         _start_server(open_browser=True)
     elif choice in ("2", "tui", "terminal"):
         _run_tui()
     elif choice in ("3", "serve"):
         _start_server(open_browser=False)
-    elif choice in ("q", "quit", "exit"):
+    elif choice in ("4", "dev"):
+        _start_dev(open_browser=True)
+    elif choice in (None, "q", "quit", "exit"):
         return
     else:
         print(f"  Unknown choice: {choice!r}")
@@ -122,6 +141,8 @@ def main(argv: list[str] | None = None) -> None:
         return _run_tui()
     if cmd == "serve":
         return _start_server(open_browser=False)
+    if cmd == "dev":
+        return _start_dev(open_browser=True)
     if cmd:
         print(f"Unknown command: {cmd!r}\n")
         print(HELP)

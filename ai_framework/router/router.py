@@ -22,6 +22,7 @@ from ai_framework.models.base import ActResponse
 from ai_framework.models.openai_compat import HttpError, OpenAICompatBackend, TransportError
 from ai_framework.router.accounts import TIERS, Account, AccountStore
 from ai_framework.router.oauth import OAuthError, OAuthManager
+from ai_framework.router.usage import UsageStore
 
 # Refresh an OAuth token this many seconds before it actually expires (clock skew + request time).
 _REFRESH_LEAD = 120.0
@@ -82,10 +83,14 @@ class RouterBackend:
         store: AccountStore,
         http_post: Any | None = None,
         oauth: OAuthManager | None = None,
+        usage: UsageStore | None = None,
     ) -> None:
         self._store = store
         self._http_post = http_post  # injectable for tests
         self._oauth = oauth or OAuthManager()
+        # Persistent per-account usage (calls + tokens) behind the Quota Tracker. Falls back to a
+        # default-path store so a RouterBackend built without one still writes ai_usage.json.
+        self._usage = usage or UsageStore()
 
     def _fresh_key(self, acct: Account) -> str:
         """Refresh an OAuth account's access token in place if it is at/near expiry."""
@@ -94,15 +99,23 @@ class RouterBackend:
         if acct.token_expiry and _now() < acct.token_expiry - _REFRESH_LEAD:
             return acct.api_key
         try:
-            tokens = self._oauth.refresh(acct.oauth_provider, acct.refresh_token)
+            tokens = self._oauth.refresh(
+                acct.oauth_provider, acct.refresh_token, acct.provider_data
+            )
         except OAuthError:
             return acct.api_key  # let the upstream 401 drive the normal cooldown path
         self._store.update(acct.id, tokens)
         return tokens.get("api_key", acct.api_key)
 
     def _backend_for(self, acct: Account, key: str) -> Any:
-        """Pick the wire adapter matching the account's ``api_style``."""
-        if acct.api_style == "anthropic":
+        """Pick the wire adapter matching the account's ``api_style``.
+
+        The bespoke adapters (Kiro/Antigravity/Gemini) are imported lazily so this module — and
+        anything that only rotates OpenAI/Anthropic accounts — never pays to import the AWS
+        EventStream parser or the Google cloaking layer.
+        """
+        style = acct.api_style
+        if style == "anthropic":
             return AnthropicCompatBackend(
                 base_url=acct.base_url,
                 model=acct.model or "claude-sonnet-4-6",
@@ -111,6 +124,44 @@ class RouterBackend:
                 http_post=self._http_post,
                 extra_headers=acct.extra_headers or None,
                 oauth=bool(acct.oauth_provider),
+            )
+        if style == "kiro":
+            from ai_framework.models.kiro_backend import KiroBackend
+
+            # Kiro speaks AWS CodeWhisperer's binary EventStream, not JSON — it uses its own
+            # raw-bytes transport, so the router's JSON poster is intentionally not passed here.
+            return KiroBackend(
+                base_url=acct.base_url,
+                model=acct.model or "claude-sonnet-4.5",
+                api_key=key or None,
+                name=acct.id,
+                extra_headers=acct.extra_headers or None,
+                provider_data=acct.provider_data,
+            )
+        if style == "antigravity":
+            from ai_framework.models.antigravity_backend import AntigravityBackend
+
+            return AntigravityBackend(
+                base_url=acct.base_url,
+                model=acct.model or "gemini-3-flash-agent",
+                api_key=key or None,
+                name=acct.id,
+                http_post=self._http_post,
+                extra_headers=acct.extra_headers or None,
+                provider_data=acct.provider_data,
+            )
+        if style in ("gemini", "gemini-cli"):
+            from ai_framework.models.gemini_backend import GeminiBackend
+
+            return GeminiBackend(
+                base_url=acct.base_url,
+                model=acct.model or "gemini-2.5-flash",
+                api_key=key or None,
+                name=acct.id,
+                http_post=self._http_post,
+                extra_headers=acct.extra_headers or None,
+                cli_style=(style == "gemini-cli"),
+                provider_data=acct.provider_data,
             )
         return OpenAICompatBackend(
             base_url=acct.base_url,
@@ -147,18 +198,28 @@ class RouterBackend:
             try:
                 result = invoke(backend)
                 _record(acct.id, ok=True, status=200)
+                usage = getattr(backend, "last_usage", None) or {}
+                self._usage.record(
+                    acct.id, ok=True,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                )
                 return result
             except HttpError as exc:
                 _record(
                     acct.id, ok=False, status=exc.status, error=str(exc),
                     cooldown=_cooldown_for(exc.status),
                 )
+                self._usage.record(acct.id, ok=False)
                 errors.append(f"{acct.label}: HTTP {exc.status}")
             except TransportError as exc:
                 _record(acct.id, ok=False, status=0, error=str(exc), cooldown=_DEFAULT_COOLDOWN)
+                self._usage.record(acct.id, ok=False)
                 errors.append(f"{acct.label}: {exc}")
             except Exception as exc:  # noqa: BLE001 - a bad account must not kill the run
                 _record(acct.id, ok=False, status=-1, error=str(exc), cooldown=_DEFAULT_COOLDOWN)
+                self._usage.record(acct.id, ok=False)
                 errors.append(f"{acct.label}: {type(exc).__name__}")
         raise RuntimeError("all AI accounts failed — " + "; ".join(errors))
 

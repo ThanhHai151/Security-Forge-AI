@@ -32,18 +32,17 @@ export const STRINGS = {
     navPentest: "Pentest",
     navVuln: "Vuln",
     navDefense: "Defense",
-    navAi: "AI",
-    navAuto: "Auto-Pentest",
+    navAgent: "Agent",
     navRouter: "Providers",
 
-    // ── Auto-Pentest terminal (continuous campaign) ──
-    termKicker: "Autonomous Engagement",
-    termTitle: "Point it at a domain. It keeps going.",
-    termLead:
-      "Enter a target and the agent runs recon, then loops — each phase chains the last, going deeper and wider, tracking what it has tried and what it hasn't. You approve every state-changing step; it stays silent by default.",
+    // ── Agent console: continuous-campaign mode ──
     termNewTarget: "New target",
     termDomainPlaceholder: "example.com",
     termStart: "Start",
+    termAutopilot: "Autopilot",
+    termAutopilotHint: "run every phase automatically from one request",
+    termAutoApprove: "Auto-approve state-changing actions (skip the manual hold)",
+    termCompleted: "Autopilot finished — phase budget reached.",
     termAuthOnly:
       "Authorized targets only. The domain you enter becomes the in-scope target.",
     termPhase: "Phase",
@@ -65,7 +64,6 @@ export const STRINGS = {
     termReject: "Reject",
     termApproved: "approved",
     termRejected: "rejected",
-    termNoRun: "Click + and enter a domain to begin an autonomous engagement.",
     termEmptyCoverage: "No techniques mapped yet.",
 
     // ── Severity (shared) ──
@@ -104,6 +102,14 @@ export const STRINGS = {
     defFindings: "Findings",
     defAuthNote:
       "For projects you own or are authorized to assess. Findings are proposals, not automatic changes.",
+    defCodeReview: "Code review",
+    defDeps: "Dependencies",
+    defDepsScanned: "dependencies scanned",
+    defManifests: "manifest(s)",
+    defCheckAdvisories: "Check advisories online (OSV)",
+    defNoVulnDeps: "No known-vulnerable dependencies matched.",
+    defDepsOffline: "Enable the online check to match dependencies against OSV advisories.",
+    defFixedIn: "fixed in",
 
     // ── Dashboard (profile) ──
     profileKicker: "Profile",
@@ -131,19 +137,6 @@ export const STRINGS = {
     noTools: "No tools match your filters.",
 
     // ── AI Agent console ──
-    aiKicker: "AI Agent",
-    aiTitle: "Run an AI pentest agent.",
-    aiLead:
-      "Drive the Hermes agent loop against an authorized target with the AI provider and model of your choice. It reasons step by step, uses the platform's tools, remembers what it learns, and budgets its own context.",
-    aiMemoryTitle: "Remembers (Hermes)",
-    aiMemoryNote:
-      "Each run records facts, attempts, and dead ends, then recalls them next time — so the agent builds on what it already did.",
-    aiBudgetTitle: "Budgets context (Headroom)",
-    aiBudgetNote:
-      "Headroom fits every model call inside the context window, reserving output room and compacting old turns so long runs never overflow.",
-    aiPersonaTitle: "Thinks, not scripts",
-    aiPersonaNote:
-      "The agent reasons like a curious human pentester — hypotheses from evidence — and acts only on targets you authorize.",
     aiProvider: "Provider",
     aiModel: "Model",
     aiModelPlaceholder: "model id (e.g. claude-sonnet-4-6)",
@@ -167,7 +160,6 @@ export const STRINGS = {
       "This provider is a local proxy you run separately — it manages your AI accounts. Install and launch it, add your accounts in its dashboard, then reload.",
     aiRepo: "Repository",
     aiOpenDashboard: "Open dashboard",
-    aiNoRun: "Configure a run on the left, then hit Run agent.",
     aiTurn: "Turn",
     aiTurns: "turns",
     aiPlan: "Next step",
@@ -179,6 +171,16 @@ export const STRINGS = {
     aiAccountsReady: "account(s) in pool",
     aiMemHeading: "What the agent remembers",
     aiMemEmpty: "Nothing learned for this target yet — runs will fill this in.",
+    aiStop: "Stop",
+    agentModeSingle: "Single run",
+    agentModeContinuous: "Continuous",
+    aiHistory: "History",
+    aiNewRun: "New run",
+    aiNoHistory: "No runs yet — start one below.",
+    aiTerminal: "Terminal",
+    aiTerminalEmpty: "Raw tool calls and output will appear here once the agent starts working.",
+    aiYou: "You",
+    aiAgentLabel: "Agent",
 
     // ── Providers page ──
     routerKicker: "Providers",
@@ -267,8 +269,67 @@ export const STRINGS = {
     pvTest: "Test",
     pvTestOk: "Works",
     pvTestFail: "Failed",
+    pvTestLimited: "Rate-limited · key valid",
+    pvTestReachable: "Key OK · check model",
+    pvTestServer: "Provider error",
     pvConnectBtn: "Connect",
     pvClose: "Close",
+
+    // ── Header settings menu (gear): quota / models / import-export ──
+    setMenu: "Settings",
+    setQuota: "Quota tracker",
+    setModels: "Models",
+    setIO: "Import / Export",
+
+    // Quota tracker popup
+    qtTitle: "Quota tracker",
+    qtSubtitle: "Per-account usage and daily limits",
+    qtToday: "today",
+    qtTotal: "Lifetime",
+    qtRequests: "Requests",
+    qtTokens: "Tokens",
+    qtSuccess: "Success",
+    qtLimitReq: "Daily request limit",
+    qtLimitTok: "Daily token limit",
+    qtNoLimit: "no limit",
+    qtReset: "Reset this account",
+    qtResetAll: "Reset all",
+    qtResetConfirm: "Reset all recorded usage? This can't be undone.",
+    qtNoAccounts: "No accounts yet — add one on the Providers page.",
+    qtCooling: "cooling",
+    qtSave: "Save",
+    qtPoolToday: (r, tok) => `Today: ${r} requests · ${tok} tokens`,
+
+    // Models popup
+    mdTitle: "Models",
+    mdSubtitle: "Models across your connected accounts",
+    mdSearch: "Search models…",
+    mdCurrent: "model id",
+    mdFetch: "Fetch live models",
+    mdSet: "Set",
+    mdApplied: "Saved",
+    mdCatalog: "Catalog",
+    mdAccounts: "Your accounts",
+    mdNoAccounts: "No accounts yet — add one on the Providers page.",
+    mdNoModels: "No models match.",
+
+    // Import / Export popup
+    ioTitle: "Import / Export",
+    ioSubtitle: "Back up or share your configured accounts",
+    ioExport: "Export accounts",
+    ioExportNote: "Download your configured accounts as a JSON file you can re-import later.",
+    ioIncludeKeys: "Include secret API keys (needed to re-use the accounts elsewhere)",
+    ioKeysWarning:
+      "The file will contain your API keys and tokens in plain text. Keep it somewhere safe.",
+    ioDownload: "Download backup",
+    ioImport: "Import accounts",
+    ioImportNote: "Upload a previously exported JSON file to add its accounts to your pool.",
+    ioChooseFile: "Choose a JSON file…",
+    ioModeMerge: "Merge — add new, skip duplicates",
+    ioModeReplace: "Replace — clear the pool first",
+    ioRun: "Import",
+    ioResult: (added, skipped) => `Imported ${added}, skipped ${skipped}.`,
+    ioParseError: "Couldn't read that file — is it a SecForge export?",
   },
   vi: {
     brand: "SecForge",
@@ -300,18 +361,17 @@ export const STRINGS = {
     navPentest: "Pentest",
     navVuln: "Lỗ hổng",
     navDefense: "Phòng thủ",
-    navAi: "AI",
-    navAuto: "Tự động",
+    navAgent: "Tác nhân",
     navRouter: "Nhà cung cấp",
 
-    // ── Auto-Pentest terminal (continuous campaign) ──
-    termKicker: "Chiến dịch tự động",
-    termTitle: "Trỏ vào một domain. Nó tự chạy tiếp.",
-    termLead:
-      "Nhập mục tiêu, tác nhân sẽ recon rồi lặp — mỗi phase nối tiếp phase trước, đi sâu và rộng hơn, đánh dấu những gì đã thử và chưa thử. Bạn duyệt mọi bước thay đổi dữ liệu; mặc định hoạt động im lặng.",
+    // ── Agent console: continuous-campaign mode ──
     termNewTarget: "Mục tiêu mới",
     termDomainPlaceholder: "example.com",
     termStart: "Bắt đầu",
+    termAutopilot: "Tự động",
+    termAutopilotHint: "chạy toàn bộ các phase tự động chỉ từ một lần yêu cầu",
+    termAutoApprove: "Tự động duyệt các hành động thay đổi dữ liệu (bỏ qua giữ tay)",
+    termCompleted: "Autopilot hoàn tất — đã đạt hạn mức phase.",
     termAuthOnly:
       "Chỉ mục tiêu được phép. Domain bạn nhập trở thành mục tiêu trong phạm vi.",
     termPhase: "Phase",
@@ -333,7 +393,6 @@ export const STRINGS = {
     termReject: "Từ chối",
     termApproved: "đã duyệt",
     termRejected: "đã từ chối",
-    termNoRun: "Bấm + và nhập một domain để bắt đầu chiến dịch tự động.",
     termEmptyCoverage: "Chưa lập bản đồ kỹ thuật nào.",
 
     // ── Severity (shared) ──
@@ -372,6 +431,14 @@ export const STRINGS = {
     defFindings: "Phát hiện",
     defAuthNote:
       "Chỉ cho dự án bạn sở hữu hoặc được ủy quyền đánh giá. Các phát hiện là đề xuất, không tự thay đổi mã.",
+    defCodeReview: "Rà soát mã",
+    defDeps: "Phụ thuộc",
+    defDepsScanned: "phụ thuộc đã quét",
+    defManifests: "tệp khai báo",
+    defCheckAdvisories: "Kiểm tra advisory trực tuyến (OSV)",
+    defNoVulnDeps: "Không có phụ thuộc dính lỗ hổng đã biết.",
+    defDepsOffline: "Bật kiểm tra trực tuyến để đối chiếu phụ thuộc với advisory OSV.",
+    defFixedIn: "đã sửa ở",
 
     // ── Dashboard (profile) ──
     profileKicker: "Hồ sơ",
@@ -399,19 +466,6 @@ export const STRINGS = {
     noTools: "Không có công cụ nào khớp bộ lọc.",
 
     // ── AI Agent console ──
-    aiKicker: "Tác nhân AI",
-    aiTitle: "Chạy tác nhân pentest AI.",
-    aiLead:
-      "Điều khiển vòng lặp tác nhân Hermes nhắm vào một đích được ủy quyền, với nhà cung cấp và mô hình AI bạn chọn. Nó suy luận từng bước, dùng công cụ của nền tảng, ghi nhớ điều học được, và tự cân đối ngữ cảnh.",
-    aiMemoryTitle: "Ghi nhớ (Hermes)",
-    aiMemoryNote:
-      "Mỗi lần chạy ghi lại dữ kiện, các lần thử và ngõ cụt, rồi gợi lại ở lần sau — nên tác nhân kế thừa những gì đã làm.",
-    aiBudgetTitle: "Cân đối ngữ cảnh (Headroom)",
-    aiBudgetNote:
-      "Headroom nhét mỗi lần gọi mô hình vừa cửa sổ ngữ cảnh, chừa chỗ cho đầu ra và nén các lượt cũ để phiên dài không tràn.",
-    aiPersonaTitle: "Tư duy, không máy móc",
-    aiPersonaNote:
-      "Tác nhân suy luận như một pentester tò mò — đặt giả thuyết từ bằng chứng — và chỉ hành động trên đích bạn ủy quyền.",
     aiProvider: "Nhà cung cấp",
     aiModel: "Mô hình",
     aiModelPlaceholder: "mã mô hình (vd: claude-sonnet-4-6)",
@@ -435,7 +489,6 @@ export const STRINGS = {
       "Nhà cung cấp này là proxy cục bộ bạn chạy riêng — nó quản lý các tài khoản AI của bạn. Cài và khởi chạy, thêm tài khoản trong bảng điều khiển của nó, rồi tải lại.",
     aiRepo: "Kho mã nguồn",
     aiOpenDashboard: "Mở bảng điều khiển",
-    aiNoRun: "Cấu hình bên trái, rồi nhấn Chạy tác nhân.",
     aiTurn: "Lượt",
     aiTurns: "lượt",
     aiPlan: "Bước tiếp",
@@ -447,6 +500,16 @@ export const STRINGS = {
     aiAccountsReady: "tài khoản trong bể",
     aiMemHeading: "Tác nhân đang nhớ gì",
     aiMemEmpty: "Chưa học được gì cho đích này — các lần chạy sẽ bổ sung.",
+    aiStop: "Dừng",
+    agentModeSingle: "Chạy đơn",
+    agentModeContinuous: "Liên tục",
+    aiHistory: "Lịch sử",
+    aiNewRun: "Cuộc chạy mới",
+    aiNoHistory: "Chưa có lần chạy nào — bắt đầu bên dưới.",
+    aiTerminal: "Terminal",
+    aiTerminalEmpty: "Lệnh gọi công cụ và đầu ra thô sẽ hiện ở đây khi tác nhân bắt đầu làm việc.",
+    aiYou: "Bạn",
+    aiAgentLabel: "Tác nhân",
 
     // ── Providers page ──
     routerKicker: "Nhà cung cấp",
@@ -534,8 +597,66 @@ export const STRINGS = {
     pvTest: "Kiểm tra",
     pvTestOk: "Hoạt động",
     pvTestFail: "Thất bại",
+    pvTestLimited: "Bị giới hạn tần suất · key hợp lệ",
+    pvTestReachable: "Key OK · kiểm tra model",
+    pvTestServer: "Lỗi nhà cung cấp",
     pvConnectBtn: "Kết nối",
     pvClose: "Đóng",
+
+    // ── Menu cài đặt trên header (bánh răng): hạn mức / mô hình / nhập-xuất ──
+    setMenu: "Cài đặt",
+    setQuota: "Theo dõi hạn mức",
+    setModels: "Mô hình",
+    setIO: "Nhập / Xuất",
+
+    // Popup theo dõi hạn mức
+    qtTitle: "Theo dõi hạn mức",
+    qtSubtitle: "Mức dùng và giới hạn hằng ngày theo từng tài khoản",
+    qtToday: "hôm nay",
+    qtTotal: "Tổng cộng",
+    qtRequests: "Yêu cầu",
+    qtTokens: "Token",
+    qtSuccess: "Thành công",
+    qtLimitReq: "Giới hạn yêu cầu/ngày",
+    qtLimitTok: "Giới hạn token/ngày",
+    qtNoLimit: "không giới hạn",
+    qtReset: "Đặt lại tài khoản này",
+    qtResetAll: "Đặt lại tất cả",
+    qtResetConfirm: "Đặt lại toàn bộ số liệu đã ghi? Không thể hoàn tác.",
+    qtNoAccounts: "Chưa có tài khoản — thêm ở trang Nhà cung cấp.",
+    qtCooling: "đang nghỉ",
+    qtSave: "Lưu",
+    qtPoolToday: (r, tok) => `Hôm nay: ${r} yêu cầu · ${tok} token`,
+
+    // Popup mô hình
+    mdTitle: "Mô hình",
+    mdSubtitle: "Mô hình trên các tài khoản đã kết nối",
+    mdSearch: "Tìm mô hình…",
+    mdCurrent: "mã mô hình",
+    mdFetch: "Lấy mô hình trực tiếp",
+    mdSet: "Đặt",
+    mdApplied: "Đã lưu",
+    mdCatalog: "Danh mục",
+    mdAccounts: "Tài khoản của bạn",
+    mdNoAccounts: "Chưa có tài khoản — thêm ở trang Nhà cung cấp.",
+    mdNoModels: "Không có mô hình phù hợp.",
+
+    // Popup nhập / xuất
+    ioTitle: "Nhập / Xuất",
+    ioSubtitle: "Sao lưu hoặc chia sẻ các tài khoản đã cấu hình",
+    ioExport: "Xuất tài khoản",
+    ioExportNote: "Tải các tài khoản đã cấu hình dưới dạng tệp JSON để nhập lại sau.",
+    ioIncludeKeys: "Kèm khóa API bí mật (cần để dùng lại tài khoản ở nơi khác)",
+    ioKeysWarning: "Tệp sẽ chứa khóa API và token dạng văn bản thuần. Hãy lưu giữ cẩn thận.",
+    ioDownload: "Tải bản sao lưu",
+    ioImport: "Nhập tài khoản",
+    ioImportNote: "Tải lên tệp JSON đã xuất trước đó để thêm tài khoản vào bể.",
+    ioChooseFile: "Chọn tệp JSON…",
+    ioModeMerge: "Gộp — thêm mới, bỏ qua trùng",
+    ioModeReplace: "Thay thế — xóa bể trước",
+    ioRun: "Nhập",
+    ioResult: (added, skipped) => `Đã nhập ${added}, bỏ qua ${skipped}.`,
+    ioParseError: "Không đọc được tệp — có phải bản xuất từ SecForge không?",
   },
 };
 

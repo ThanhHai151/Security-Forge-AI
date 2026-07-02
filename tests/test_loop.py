@@ -1,5 +1,7 @@
 """Step 4: the Hermes loop runs end to end on the offline backend."""
 
+import threading
+
 from ai_framework.agent.contracts import Run, RunConfig, ToolCall
 from ai_framework.agent.loop import run_loop
 from ai_framework.models.base import ActResponse
@@ -45,6 +47,47 @@ def test_loop_halts_at_step_budget(mock_server):
     run = run_loop(config, _NeverDone(), _registry())
     assert run.outcome == "step_budget_reached"
     assert len(run.transcript) == 3
+
+
+def test_cancel_set_before_start_stops_with_no_turns(mock_server):
+    """A Stop click that lands before the loop's first turn: no work done, outcome=stopped."""
+    config = RunConfig(
+        goal="x", target=mock_server, step_budget=5, authorized_targets={mock_server}
+    )
+    cancel = threading.Event()
+    cancel.set()
+    run = run_loop(config, OfflineBackend(), _registry(), cancel=cancel)
+    assert run.outcome == "stopped"
+    assert run.transcript == []
+
+
+def test_cancel_set_mid_run_stops_before_the_next_turn(mock_server):
+    """A Stop click mid-run: the in-flight turn finishes, no further turn starts."""
+
+    class _CancelsAfterFirstAct(OfflineBackend):
+        def __init__(self, cancel: threading.Event) -> None:
+            super().__init__()
+            self._cancel = cancel
+            self.calls = 0
+
+        def act(self, system, transcript, config, tools):
+            self.calls += 1
+            if self.calls == 1:
+                self._cancel.set()  # operator hits Stop while turn 1 is in flight
+            action = super().act(system, transcript, config, tools)
+            action.done = False  # would otherwise finish on its own; force reliance on cancel
+            return action
+
+    config = RunConfig(
+        goal="x", target=mock_server, step_budget=5, authorized_targets={mock_server}
+    )
+    cancel = threading.Event()
+    backend = _CancelsAfterFirstAct(cancel)
+    run = run_loop(config, backend, _registry(), cancel=cancel)
+
+    assert run.outcome == "stopped"
+    assert len(run.transcript) == 1  # turn 1 completed; turn 2 never started
+    assert backend.calls == 1
 
 
 def test_run_replays_from_json(mock_server):

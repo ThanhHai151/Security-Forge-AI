@@ -22,9 +22,9 @@ other `README.md` is scoped to the directory it lives in.
 | # | Feature | Directory |
 |---|---------|-----------|
 | 1 | **Notion-like knowledge viewer** — renders ~278 markdown notes with collapsible category nav, per-page table of contents, syntax-highlighted payloads, and full-text search. | [`frontend/`](frontend/README.md), [`knowledge_base/`](knowledge_base/README.md) |
-| 2 | **AI pentest framework** — an agent that runs a test the way a human would: pick a technique, run a tool, read the result, decide the next move. | [`ai_framework/`](ai_framework/README.md) |
+| 2 | **AI pentest framework** — an agent that runs a test the way a human would: pick a technique, run a tool, read the result, decide the next move. **Autopilot** drives the whole engagement from a single request (`POST /pentest` with just an address). | [`ai_framework/`](ai_framework/README.md) |
 | 3 | **Log-driven planning** — feed each step's logs back in and the agent produces the next execution plan, closing the observe → reason → act loop. | [`ai_framework/agent/`](ai_framework/agent/README.md) |
-| 4 | **Defensive review** — point SecForge at a web codebase and it reviews for the catalogued vulnerability classes, then recommends concrete hardening. | [`defense/`](defense/README.md) |
+| 4 | **Defensive review + SCA** — point SecForge at a web codebase and it reviews source for the catalogued vulnerability classes **and** scans dependencies (OSV) for known CVEs, mapping each finding to concrete hardening; optionally attacks the running app live (`POST /defense/scan`). | [`defense/`](defense/README.md) |
 | 5 | **Two-way vuln discovery** — search the indexed knowledge base, and auto-search public CVE sources when an unfamiliar error/technology appears. | [`vuln_search/`](vuln_search/README.md) |
 | 6 | **Persistent memory (Hermes-style)** — findings, target facts, and lessons persist across steps and sessions. | [`ai_framework/memory/`](ai_framework/memory/README.md) |
 | 7 | **Self-research** — when the KB falls short, the agent researches (web + CVE) and folds the result back into its working knowledge. | [`ai_framework/research/`](ai_framework/research/README.md) |

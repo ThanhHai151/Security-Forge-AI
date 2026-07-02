@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from defense.deps import osv_source, scan_dependencies
 from defense.review import review_path
 from i18n.loader import available_locales, glossary, load_strings
 from knowledge_base.index import KnowledgeBase, repo_root
@@ -80,6 +81,25 @@ class PlatformServices:
             data["findings"] = data["findings"][:_MAX_DEFENSE_FINDINGS]
             data["truncated"] = True
         return data
+
+    def defense_scan(self, path: str, deps_online: bool = False) -> dict[str, Any]:
+        """Full static assessment: code signatures + a dependency (SCA) inventory in one report.
+
+        The code review is instant and offline. The dependency inventory is always returned;
+        advisory lookup against OSV happens only when ``deps_online`` is set (same opt-in-online
+        convention as ``vuln_search``), so the default call stays fast and network-free.
+        """
+        target = Path(path).expanduser()
+        if not target.exists():
+            return {"error": f"path not found: {path}"}
+        code_review = self.defense_review(str(target))
+        source = osv_source if deps_online else None
+        dependencies = scan_dependencies(target, source=source).model_dump()
+        return {
+            "target": str(target.resolve()),
+            "code_review": code_review,
+            "dependencies": dependencies,
+        }
 
     # ── i18n ──
     def i18n(self, locale: str) -> dict[str, Any]:

@@ -109,7 +109,8 @@ export default function Router({ t }) {
       live.map(async (a) => {
         try {
           const r = await testAccount(a.id);
-          if (r.ok) ok += 1;
+          // A rate-limited account (429) authenticated fine — it's usable, just cooling down.
+          if (r.ok || r.reason === "rate_limited") ok += 1;
         } catch {
           /* counted as failure */
         }
@@ -162,7 +163,7 @@ export default function Router({ t }) {
         </span>
         <span className="text-[12px] text-zinc-400 flex-1 min-w-[16ch]">{modeNote}</span>
         <a
-          href="#/ai"
+          href="#/agent"
           className="flex items-center gap-1 text-[12px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
         >
           {t.pvOpenAgent} <ArrowRight size={13} />

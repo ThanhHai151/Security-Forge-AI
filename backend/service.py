@@ -36,9 +36,11 @@ from ai_framework.agent.system import campaign_context_block
 from ai_framework.agent.verify import FindingVerifier
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
+from ai_framework.notes.remediation import Remediator
 from ai_framework.notes.report import render_json, render_markdown
 from ai_framework.notes.store import JsonlFindingStore
 from ai_framework.router.accounts import AccountStore
+from ai_framework.router.usage import UsageStore
 from ai_framework.tools.base import ToolContext, ToolRegistry
 
 if TYPE_CHECKING:
@@ -102,6 +104,7 @@ class RunService:
         memory_path: str | None = "memory_store.jsonl",
         budget: Budget | None = None,
         accounts: AccountStore | None = None,
+        usage: UsageStore | None = None,
         findings_path: str | None = "findings_store.jsonl",
         runs_dir: str | None = "runs_store",
         campaigns_dir: str | None = "campaigns_store",
@@ -113,12 +116,18 @@ class RunService:
         self._assets_path = assets_path
         self._budget = budget
         self.accounts = accounts or AccountStore()
+        self.usage = usage or UsageStore()
         self._runs: dict[str, Run] = {}
         self._run_store = JsonRunStore(runs_dir) if runs_dir else None
         self._campaigns: dict[str, Campaign] = {}
         self._campaign_store = CampaignStore(campaigns_dir) if campaigns_dir else None
         self._lock = threading.Lock()
         self._pillars: PlatformServices | None = None
+        # Stop-button plumbing: one cancel event per in-flight run/campaign, set()-able from a
+        # request handler and polled by run_loop between turns. In-memory only — a run started
+        # before a process restart can no longer be cancelled, same as it can no longer be polled.
+        self._cancel_events: dict[str, threading.Event] = {}
+        self._campaign_cancel: dict[str, threading.Event] = {}
 
     def _findings(self) -> JsonlFindingStore | None:
         return JsonlFindingStore(self._findings_path) if self._findings_path else None
@@ -147,10 +156,10 @@ class RunService:
         if config.backend == "router":
             from ai_framework.router.router import RouterBackend
 
-            return RouterBackend(self.accounts)
+            return RouterBackend(self.accounts, usage=self.usage)
         return make_backend(config.backend)
 
-    def _execute(self, config: RunConfig, run: Run) -> None:
+    def _execute(self, config: RunConfig, run: Run, cancel: threading.Event) -> None:
         """Run the loop on a worker thread, recording errors onto the Run for polling."""
         memory = JsonlMemoryStore(self._memory_path) if self._memory_path else None
         guardrail = GuardrailController()
@@ -171,6 +180,7 @@ class RunService:
                 on_turn=checkpoint,
                 verifier=FindingVerifier(),
                 assets=self._assets(),
+                cancel=cancel,
             )
         except Exception as exc:  # noqa: BLE001 - surface to the console, don't lose the run
             run.outcome = "error"
@@ -178,14 +188,27 @@ class RunService:
         finally:
             if self._run_store is not None:
                 self._run_store.save(run)  # persist final state (incl. errors)
+            with self._lock:
+                self._cancel_events.pop(run.id, None)
 
     def start_run(self, config: RunConfig) -> str:
         run = Run(config=config)
+        cancel = threading.Event()
         with self._lock:
             self._runs[run.id] = run
-        thread = threading.Thread(target=self._execute, args=(config, run), daemon=True)
+            self._cancel_events[run.id] = cancel
+        thread = threading.Thread(target=self._execute, args=(config, run, cancel), daemon=True)
         thread.start()
         return run.id
+
+    def stop_run(self, run_id: str) -> bool:
+        """Signal a running Hermes loop to stop before its next turn (Stop button)."""
+        with self._lock:
+            cancel = self._cancel_events.get(run_id)
+        if cancel is None:
+            return False
+        cancel.set()
+        return True
 
     def get_run(self, run_id: str) -> Run | None:
         with self._lock:
@@ -213,15 +236,22 @@ class RunService:
         return store.summary(target)
 
     def run_report(self, run_id: str, fmt: str = "md") -> str | dict | None:
-        """Render one run's findings as a Markdown or JSON pentest report."""
+        """Render one run's findings as a Markdown or JSON pentest report.
+
+        Each finding is matched to its knowledge-base class so the report carries concrete fix
+        guidance inline (weakness → remediation), the same curated text the defensive reviewer uses.
+        """
         store = self._findings()
         run = self.get_run(run_id)
         if store is None or run is None:
             return None
         findings = store.for_run(run_id)
+        remediator = Remediator(self.pillars.kb)
         if fmt == "json":
-            return render_json(findings, target=run.config.target)
-        return render_markdown(findings, target=run.config.target, goal=run.config.goal)
+            return render_json(findings, target=run.config.target, remediator=remediator)
+        return render_markdown(
+            findings, target=run.config.target, goal=run.config.goal, remediator=remediator
+        )
 
     # ── Campaigns: the continuous ("infinite") engagement layer ──────────────────────
 
@@ -253,7 +283,7 @@ class RunService:
             "Keep every action read-only unless the operator approves a state-changing test."
         )
 
-    def _run_phase(self, campaign: Campaign) -> None:
+    def _run_phase(self, campaign: Campaign, cancel: threading.Event | None = None) -> None:
         """Execute one phase (a bounded run) on a worker thread and fold in its results."""
         cfg = campaign.config
         phase_index = campaign.phase_count  # 0-based index of the phase we are about to run
@@ -285,6 +315,9 @@ class RunService:
         memory = JsonlMemoryStore(self._memory_path) if self._memory_path else None
         checkpoint = self._run_store.save if self._run_store else None
         prior = list(campaign.coverage)
+        # Autopilot may opt into running state-changing actions without a manual approval hold —
+        # the authorized-scope gate still bounds every call. Default stays safe (hold for approval).
+        hold_mutating = not cfg.auto_approve_mutating
         try:
             backend = self._backend_for(run_config)
             run_loop(
@@ -298,11 +331,12 @@ class RunService:
                 pacer=Pacer(cfg.opsec_min_interval, cfg.opsec_jitter),
                 findings=self._findings(),
                 on_turn=checkpoint,
-                hold_mutating=True,
+                hold_mutating=hold_mutating,
                 on_hold=on_hold,
                 system_addon=addon,
                 verifier=FindingVerifier(),
                 assets=self._assets(),
+                cancel=cancel,
             )
         except Exception as exc:  # noqa: BLE001 - surface to the console, don't lose state
             run.outcome = "error"
@@ -315,6 +349,13 @@ class RunService:
             return
         if self._run_store is not None:
             self._run_store.save(run)
+
+        if run.outcome == "stopped":
+            # The operator hit Stop mid-phase — stop_campaign() already set the campaign status;
+            # don't let the coverage/hardened-streak logic below recompute it back to "running".
+            campaign.status = CampaignStatus.stopped
+            self._save_campaign(campaign)
+            return
 
         # Fold this phase's transcript into the tried/untried map and decide what's next.
         prev_confirmed, _ = coverage_signature(prior)
@@ -333,6 +374,27 @@ class RunService:
         )
         self._save_campaign(campaign)
 
+    def _run_phases(self, campaign: Campaign, cancel: threading.Event) -> None:
+        """Autopilot: chain phases with no operator pause until a stop condition.
+
+        Runs one phase after another on this worker thread, stopping when the target looks
+        ``hardened``, the operator ``stopped`` it, a phase ``error``ed, or the ``max_phases``
+        budget is spent (→ ``completed``). This is what makes a single request drive the whole
+        engagement end to end.
+        """
+        while True:
+            self._run_phase(campaign, cancel)
+            if campaign.status in (
+                CampaignStatus.stopped,
+                CampaignStatus.error,
+                CampaignStatus.hardened,
+            ):
+                return
+            if campaign.phase_count >= campaign.config.max_phases:
+                campaign.status = CampaignStatus.completed
+                self._save_campaign(campaign)
+                return
+
     def start_campaign(self, config: CampaignConfig) -> str:
         campaign = Campaign(config=config)
         # Seed the map with the one lead we always start from: reconnaissance.
@@ -340,8 +402,29 @@ class RunService:
             CoverageItem(technique="recon", description="initial reconnaissance", phase=1)
         ]
         self._save_campaign(campaign)
-        threading.Thread(target=self._run_phase, args=(campaign,), daemon=True).start()
+        cancel = threading.Event()
+        with self._lock:
+            self._campaign_cancel[campaign.id] = cancel
+        # Autopilot chains phases automatically; otherwise one phase runs and pauses for review.
+        if config.autopilot:
+            threading.Thread(
+                target=self._run_phases, args=(campaign, cancel), daemon=True
+            ).start()
+        else:
+            threading.Thread(
+                target=self._run_phase, args=(campaign, cancel), daemon=True
+            ).start()
         return campaign.id
+
+    def start_pentest(self, config: CampaignConfig) -> str:
+        """One-shot autonomous pentest: force autopilot on and run to a stop condition.
+
+        This backs ``POST /pentest`` — the "just give it an address" surface. The caller supplies
+        only the target (domain/URL); recon-first phase goals and the coverage map are generated
+        automatically, and the run drives itself to ``hardened``/``completed`` with no more input.
+        """
+        auto = config.model_copy(update={"autopilot": True})
+        return self.start_campaign(auto)
 
     def continue_campaign(self, campaign_id: str) -> bool:
         campaign = self._get_campaign_obj(campaign_id)
@@ -350,7 +433,11 @@ class RunService:
             CampaignStatus.hardened,
         ):
             return False
-        threading.Thread(target=self._run_phase, args=(campaign,), daemon=True).start()
+        # Fresh cancel event per resumed phase, so Stop always targets the phase actually running.
+        cancel = threading.Event()
+        with self._lock:
+            self._campaign_cancel[campaign_id] = cancel
+        threading.Thread(target=self._run_phase, args=(campaign, cancel), daemon=True).start()
         return True
 
     def stop_campaign(self, campaign_id: str) -> bool:
@@ -359,6 +446,10 @@ class RunService:
             return False
         campaign.status = CampaignStatus.stopped
         self._save_campaign(campaign)
+        with self._lock:
+            cancel = self._campaign_cancel.get(campaign_id)
+        if cancel is not None:
+            cancel.set()  # interrupt the in-flight phase's run_loop before its next turn
         return True
 
     def approve_action(self, campaign_id: str, approval_id: str) -> bool:
@@ -413,3 +504,39 @@ class RunService:
 
     def list_campaigns(self) -> list[dict]:
         return self._campaign_store.list_campaigns() if self._campaign_store else []
+
+    # ── Defense: static assessment, with an optional live attack of the running app ──────
+
+    def defense_autopilot(
+        self,
+        path: str,
+        serve_url: str | None = None,
+        deps_online: bool = False,
+        backend: str = "offline",
+        model: str | None = None,
+        base_url: str | None = None,
+        authorized_targets: set[str] | None = None,
+    ) -> dict:
+        """Assess a local project and, when it is running, attack it — then guide the fix.
+
+        Always returns the static code review + dependency (SCA) report (fix guidance is attached
+        to each code finding via the catalog "Defenses" section). When ``serve_url`` points at the
+        project's running instance (localhost or an authorized host), it also launches an autopilot
+        pentest against it and returns ``campaign_id`` so the caller can poll the live findings.
+        This is the "review the code *and* attack the running app" flow the defense brief asks for.
+        """
+        result = self.pillars.defense_scan(path, deps_online=deps_online)
+        if "error" in result:
+            return result
+        campaign_id: str | None = None
+        if serve_url:
+            cfg = CampaignConfig(
+                domain=serve_url,
+                backend=backend,
+                model=model,
+                base_url=base_url,
+                authorized_targets=set(authorized_targets or []),
+            )
+            campaign_id = self.start_pentest(cfg)
+        result["campaign_id"] = campaign_id
+        return result

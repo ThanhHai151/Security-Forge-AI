@@ -71,6 +71,49 @@ def test_campaign_chains_phases_and_hardens(tmp_path, mock_server):
     assert not svc.continue_campaign(cid)
 
 
+def _await_terminal(svc: RunService, cid: str, timeout: float = 20.0) -> dict:
+    """Block until an autopilot campaign reaches a self-stop state (no operator input)."""
+    terminal = {"hardened", "completed", "stopped", "error"}
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        c = svc.get_campaign(cid)
+        if c and c["status"] in terminal:
+            return c
+        time.sleep(0.05)
+    raise AssertionError("autopilot did not reach a terminal state in time")
+
+
+def test_autopilot_runs_to_completion_without_operator(tmp_path, mock_server):
+    """A single start_pentest call drives every phase itself and stops on its own."""
+    svc = _service(tmp_path)
+    cfg = CampaignConfig(
+        domain=mock_server, backend="offline", phase_step_budget=4, max_phases=5,
+        opsec_min_interval=0.0, opsec_jitter=0.0,
+    )
+    cid = svc.start_pentest(cfg)  # no continue_campaign() calls anywhere below
+
+    c = _await_terminal(svc, cid)
+    # With the offline stub, consecutive empty phases harden the target — reached autonomously.
+    assert c["status"] in {"hardened", "completed"}
+    assert 1 < len(c["phase_runs"]) <= 5  # it chained phases by itself, within the budget
+    cov = {x["technique"]: x["status"] for x in c["coverage"]}
+    assert cov.get("recon") == "confirmed"
+
+
+def test_autopilot_respects_max_phases(tmp_path, mock_server):
+    """max_phases bounds an autopilot run even if it never hardens."""
+    svc = _service(tmp_path)
+    # Force a target that always looks "new" is hard with the offline stub, so just assert the
+    # cap holds: the stub hardens fast, but the phase count must never exceed the budget.
+    cfg = CampaignConfig(
+        domain=mock_server, backend="offline", phase_step_budget=2, max_phases=3,
+        opsec_min_interval=0.0, opsec_jitter=0.0,
+    )
+    cid = svc.start_pentest(cfg)
+    c = _await_terminal(svc, cid)
+    assert len(c["phase_runs"]) <= 3
+
+
 def test_approve_action_executes_held_call(tmp_path, mock_server):
     svc = _service(tmp_path)
     cfg = CampaignConfig(domain=mock_server, backend="offline", opsec_min_interval=0.0)

@@ -367,4 +367,14 @@ html.light .hljs-number, html.light .hljs-literal, html.light .hljs-variable, ht
 html.light .hljs-link, html.light .hljs-type { color: #5870A0; }
 html.light .hljs-title, html.light .hljs-section, html.light .hljs-attribute, html.light .hljs-selector-id,
 html.light .hljs-selector-class { color: #3C5070; }
+
 html.light .hljs-deletion { color: #C0392B; }
+
+/* ── Agent page shell (components/Agent.jsx): fixed to one viewport on desktop so only its
+   panels (history, chat/campaign thread, terminal) scroll internally, never the whole page —
+   plain CSS because Tailwind's arbitrary-value parser doesn't reliably generate `calc()`
+   classes that reference a custom property. 112px = nav (64px) + this page's own py-6
+   top/bottom padding (24px + 24px). ── */
+@media (min-width: 1024px) {
+  .agent-page-shell { height: calc(100vh - 112px); overflow: hidden; }
+}

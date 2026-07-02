@@ -49,6 +49,41 @@ def test_defense_review_finds_issues(tmp_path):
     assert any(f["slug"] == "sql_injection" for f in report["findings"])
 
 
+def test_defense_scan_combines_code_and_dependencies(tmp_path):
+    (tmp_path / "app.py").write_text(
+        "cursor.execute('SELECT * FROM u WHERE n = ' + name)\n", encoding="utf-8"
+    )
+    (tmp_path / "requirements.txt").write_text("django==3.2.0\n", encoding="utf-8")
+    report = PlatformServices().defense_scan(str(tmp_path))  # deps offline (no network)
+    assert any(f["slug"] == "sql_injection" for f in report["code_review"]["findings"])
+    assert report["dependencies"]["dependencies_scanned"] == 1
+    assert report["dependencies"]["advisory_source"] == "none"
+
+
+def test_defense_autopilot_launches_live_attack(tmp_path, mock_server):
+    svc = RunService(
+        memory_path=str(tmp_path / "m.jsonl"),
+        findings_path=str(tmp_path / "f.jsonl"),
+        runs_dir=str(tmp_path / "runs"),
+        campaigns_dir=str(tmp_path / "camp"),
+    )
+    (tmp_path / "app.py").write_text("eval(request.args['x'])\n", encoding="utf-8")
+    result = svc.defense_autopilot(str(tmp_path), serve_url=mock_server, backend="offline")
+    assert "code_review" in result and "dependencies" in result
+    assert result["campaign_id"]  # a live pentest campaign was started against the running app
+    assert svc.get_campaign(result["campaign_id"]) is not None
+
+
+def test_defense_autopilot_static_only_without_url(tmp_path):
+    svc = RunService(
+        memory_path=str(tmp_path / "m.jsonl"),
+        campaigns_dir=str(tmp_path / "camp"),
+        runs_dir=str(tmp_path / "runs"),
+    )
+    result = svc.defense_autopilot(str(tmp_path))
+    assert result["campaign_id"] is None  # no serve_url → static assessment only
+
+
 # ── HTTP layer ──
 @pytest.fixture
 def api(tmp_path):
@@ -104,3 +139,47 @@ def test_http_defense_review_bad_path(api):
     with pytest.raises(HTTPError) as exc:
         urlopen(Request(f"{api}/defense/review", data=body, method="POST"))
     assert exc.value.code == 400
+
+
+@pytest.fixture
+def api_scoped(tmp_path):
+    """An API server whose service writes runs/campaigns under tmp (never the repo root)."""
+    service = RunService(
+        memory_path=str(tmp_path / "mem.jsonl"),
+        findings_path=str(tmp_path / "f.jsonl"),
+        runs_dir=str(tmp_path / "runs"),
+        campaigns_dir=str(tmp_path / "camp"),
+    )
+    server = HTTPServer(("127.0.0.1", 0), make_handler(service))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def _post(url, payload):
+    body = json.dumps(payload).encode()
+    with urlopen(Request(url, data=body, method="POST")) as resp:
+        return resp.status, json.loads(resp.read())
+
+
+def test_http_pentest_one_shot(api_scoped, mock_server):
+    """POST /pentest with just an address returns a campaign id (autopilot forced on)."""
+    status, data = _post(f"{api_scoped}/pentest", {"target": mock_server, "backend": "offline"})
+    assert status == 201 and data["id"]
+    campaign = _get(f"{api_scoped}/campaigns/{data['id']}")
+    assert campaign["config"]["autopilot"] is True
+
+
+def test_http_defense_scan(api_scoped, tmp_path):
+    (tmp_path / "vuln.py").write_text("import os\nos.system('ping ' + host)\n", encoding="utf-8")
+    (tmp_path / "requirements.txt").write_text("flask==0.12\n", encoding="utf-8")
+    status, report = _post(f"{api_scoped}/defense/scan", {"path": str(tmp_path)})
+    assert status == 200
+    assert any(f["slug"] == "os_command_injection" for f in report["code_review"]["findings"])
+    assert report["dependencies"]["dependencies_scanned"] == 1
+    assert report["campaign_id"] is None

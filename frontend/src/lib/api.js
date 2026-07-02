@@ -29,9 +29,14 @@ const send = (method, p, body) =>
 // ── Runs (the agent loop) ──
 export const startRun = (body) => send("POST", "/runs", body);
 export const getRun = (id) => get(`/runs/${encodeURIComponent(id)}`);
+export const listRuns = () => get("/runs"); // -> { runs: [{id, goal, target, backend, outcome, turns}] }
+export const stopRun = (id) => send("POST", `/runs/${encodeURIComponent(id)}/stop`); // -> {ok}
 
 // ── Campaigns (the continuous "infinite" engagement) ──
 export const startCampaign = (body) => send("POST", "/campaigns", body); // {domain, backend?, ...}
+// One-shot autonomous pentest: just an address. Autopilot is forced on server-side, so the run
+// drives every phase itself to a stop state. -> { id } (poll with getCampaign).
+export const startPentest = (body) => send("POST", "/pentest", body); // {target|domain, backend?, ...}
 export const listCampaigns = () => get("/campaigns");
 export const getCampaign = (id) => get(`/campaigns/${encodeURIComponent(id)}`);
 const campaignAction = (id, action, body) =>
@@ -57,9 +62,24 @@ export const setPolicy = (policy) => send("POST", "/router/policy", { policy });
 export const testConnection = (body) => send("POST", "/test-connection", body); // {base_url, api_key?, model?, api_style?}
 export const testAccount = (id) => send("POST", `/accounts/${encodeURIComponent(id)}/test`);
 
+// ── Settings menu: quota tracker, models overview, import/export ──
+// Per-account usage + daily limits + live health. -> { accounts: [{id,label,limits,total,today,health}] }
+export const getUsage = () => get("/usage");
+// Clear recorded usage for one account, or the whole pool when no id is given.
+export const resetUsage = (accountId) =>
+  send("POST", "/usage/reset", accountId ? { account_id: accountId } : {});
+// Pool-wide model overview (network-free). -> { accounts:[...], catalog:[{provider,label,models}] }
+export const getModelsOverview = () => get("/models");
+// Backup: the raw export object; the UI turns it into a downloadable file.
+export const exportAccounts = (includeKeys = false) =>
+  get(`/accounts/export?include_keys=${includeKeys ? 1 : 0}`);
+// Restore: add accounts from an uploaded export. mode: "merge" (dedupe) | "replace" (clear first).
+export const importAccounts = (accounts, mode = "merge") =>
+  send("POST", "/accounts/import", { accounts, mode });
+
 // ── OAuth sign-in flows (device-code + browser PKCE) ──
 export const getOAuthProviders = () => get("/oauth/providers"); // -> { id: {flow, supported, reason} }
-export const oauthStart = (provider) => send("POST", "/oauth/start", { provider });
+export const oauthStart = (provider, model = "") => send("POST", "/oauth/start", { provider, model });
 // device: -> {status:"pending"} | {status:"done", account}; pass a label to name the connection.
 export const oauthPoll = (session_id, label = "") => send("POST", "/oauth/poll", { session_id, label });
 export const oauthComplete = (session_id, code, label = "") =>
@@ -75,3 +95,6 @@ export const vulnSearch = (q, { online = false, locale = "en" } = {}) =>
 
 // ── Defense (codebase review) ──
 export const reviewDefense = (path) => send("POST", "/defense/review", { path });
+// Combined assessment: code signatures + dependency (SCA) inventory, plus an optional live attack
+// of the running app when `serve_url` is set. -> { code_review, dependencies, campaign_id }
+export const scanDefense = (body) => send("POST", "/defense/scan", body); // {path, deps_online?, serve_url?}

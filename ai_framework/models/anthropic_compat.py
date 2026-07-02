@@ -21,7 +21,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
-from ai_framework.models.base import ActResponse
+from ai_framework.models.base import ActResponse, normalize_usage
 from ai_framework.models.openai_compat import HttpError, TransportError
 
 HttpPost = Callable[[str, dict[str, Any], dict[str, str]], dict[str, Any]]
@@ -70,6 +70,8 @@ class AnthropicCompatBackend:
         self._post = http_post or _urllib_post
         self._extra = extra_headers or {}
         self._oauth = oauth
+        # Token usage from the most recent call, for the router's quota tracker (None until set).
+        self.last_usage: dict[str, int] | None = None
 
     def _headers(self) -> dict[str, str]:
         headers = {"anthropic-version": ANTHROPIC_VERSION, **self._extra}
@@ -124,6 +126,7 @@ class AnthropicCompatBackend:
             "tools": self._tools(tools),
         }
         resp = self._post(self._url, payload, self._headers())
+        self.last_usage = normalize_usage(resp.get("usage"), anthropic=True)
         reasoning: list[str] = []
         calls: list[ToolCall] = []
         for block in resp.get("content") or []:
@@ -152,6 +155,7 @@ class AnthropicCompatBackend:
             "messages": messages,
         }
         resp = self._post(self._url, payload, self._headers())
+        self.last_usage = normalize_usage(resp.get("usage"), anthropic=True)
         return "".join(
             b.get("text", "") for b in (resp.get("content") or []) if b.get("type") == "text"
         )

@@ -7,8 +7,7 @@ import Toc from "./components/Toc";
 import DocView from "./components/DocView";
 import Landing from "./components/Landing";
 import Pentest from "./components/Pentest";
-import AiAgent from "./components/AiAgent";
-import Terminal from "./components/Terminal";
+import Agent from "./components/Agent";
 import Router from "./components/Router";
 import VulnSearch from "./components/VulnSearch";
 import Defense from "./components/Defense";
@@ -167,15 +166,9 @@ export default function App() {
         </main>
       )}
 
-      {section === "ai" && (
+      {section === "agent" && (
         <main className="pt-[64px]">
-          <AiAgent t={t} />
-        </main>
-      )}
-
-      {section === "auto" && (
-        <main className="pt-[64px]">
-          <Terminal t={t} />
+          <Agent t={t} />
         </main>
       )}
 

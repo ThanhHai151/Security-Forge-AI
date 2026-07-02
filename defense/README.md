@@ -12,8 +12,11 @@ hardening. It reuses the same brain as the offense side.
 - **Map findings to fixes** — for each weakness, surface the relevant **secure-
   implementation** guidance. The KB notes already contain "Secure Implementation" and
   "Defense Checklist" sections, so one knowledge base serves both attack and defense.
-- **Recommend or generate hardening** — produce a prioritized report, and optionally draft
-  the fix (input validation, output encoding, headers, config changes).
+- **Recommend hardening** — produce a prioritized report where each finding carries the
+  concrete secure-implementation guidance for its class (input validation, output encoding,
+  headers, config changes). Guidance is surfaced, not auto-applied.
+- **Scan dependencies (SCA)** — inventory the project's packages and flag those with published
+  advisories, with the fixed version to upgrade to.
 - **Re-check** — confirm a recommended change addresses the finding.
 
 ## Why it shares the AI framework
@@ -46,10 +49,24 @@ fix is a proposal for you to review, not an automatic change.
 - [`review.py`](review.py) — `review_path()` walks a project read-only, applies the
   signatures, and returns a severity-ranked `DefenseReport` whose findings each carry secure
   guidance; `recheck()` confirms a finding still reproduces (the "Re-check" step).
+- [`deps.py`](deps.py) — **SCA**: `parse_dependencies()` reads a project's manifests/lockfiles
+  (`requirements.txt`, `pyproject.toml`, `package.json`, `package-lock.json`) and
+  `scan_dependencies()` flags packages with published advisories, with the fixed version to
+  upgrade to. The advisory source is injectable (default: OSV.dev, opt-in-online) and degrades
+  to an inventory-only report offline.
 
-The static scan is the always-available offline path; the same loop in
-[`ai_framework`](../ai_framework/README.md) (via `backend.RunService`) is the deeper, dynamic
-complement. Served by the backend at `POST /defense/review`.
+### Static, then dynamic (the "same brain" bridge)
 
-**Status:** implemented — static signature reviewer with secure-guidance mapping + re-check,
-with tests (`tests/test_defense.py`).
+The static scan + SCA are the always-available offline path. `RunService.defense_autopilot()`
+(served at `POST /defense/scan`) returns that assessment **and**, when you pass `serve_url` for
+the project's running instance, launches an **autopilot pentest** (the offense-side
+[`ai_framework`](../ai_framework/README.md) loop) against it — so defense can *review the code
+and attack the running app*, then guide the fix. Code findings carry secure guidance inline;
+the live campaign's findings are polled like any other campaign.
+
+- `POST /defense/review` — static code signatures only (unchanged, backward compatible).
+- `POST /defense/scan` — code signatures + SCA + optional live attack (`serve_url`).
+
+**Status:** implemented — static signature reviewer + SCA + secure-guidance mapping + re-check,
+with an optional dynamic attack bridge; tests in `tests/test_defense.py`, `tests/test_deps.py`,
+`tests/test_backend_pillars.py`.

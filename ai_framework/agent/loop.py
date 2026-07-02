@@ -11,11 +11,13 @@ stops it. Optional collaborators (all off by default so the offline demo stays m
 * ``pacer``     — OPSEC pacing between network actions (min interval + jitter).
 * ``findings``  — persist structured findings captured via ``note_finding`` for the report.
 * ``on_turn``   — checkpoint callback fired after each turn (durable runs).
+* ``cancel``    — a ``threading.Event`` an operator can set to stop the loop early (Stop button).
 """
 
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
 from urllib.parse import urlparse
 
@@ -131,6 +133,7 @@ def run_loop(
     system_addon: str = "",
     verifier: FindingVerifier | None = None,
     assets: JsonlAssetStore | None = None,
+    cancel: threading.Event | None = None,
 ) -> Run:
     tools = registry.schemas()
     base_system = build_system_prompt(config, tools)
@@ -146,6 +149,10 @@ def run_loop(
         run = Run(config=config)
 
     for i in range(config.step_budget):
+        if cancel is not None and cancel.is_set():
+            run.outcome = "stopped"
+            break
+
         # Recall relevant memory and inject it into the system prompt so the model
         # actually uses what it has learned (Step 5). Done every turn since memory grows.
         recall_k = budget.memory_recall_k if budget is not None else DEFAULT_RECALL_K

@@ -19,7 +19,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
-from ai_framework.models.base import ActResponse
+from ai_framework.models.base import ActResponse, normalize_usage
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-4o-mini"
@@ -57,6 +57,8 @@ class OpenRouterBackend:
         self._model = model or os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL)
         self._max_tokens = max_tokens
         self._post = http_post or _urllib_post
+        # Token usage from the most recent call, for the router's quota tracker (None until set).
+        self.last_usage: dict[str, int] | None = None
 
     def _headers(self) -> dict[str, str]:
         # HTTP-Referer / X-Title are OpenRouter's optional attribution headers.
@@ -116,6 +118,7 @@ class OpenRouterBackend:
             "tools": self._tools(tools),
         }
         resp = self._post(API_URL, payload, self._headers())
+        self.last_usage = normalize_usage(resp.get("usage"))
         message = resp["choices"][0]["message"]
         calls: list[ToolCall] = []
         for i, tc in enumerate(message.get("tool_calls") or []):
@@ -141,4 +144,5 @@ class OpenRouterBackend:
         )
         payload = {"model": self._model, "max_tokens": self._max_tokens, "messages": messages}
         resp = self._post(API_URL, payload, self._headers())
+        self.last_usage = normalize_usage(resp.get("usage"))
         return resp["choices"][0]["message"].get("content") or ""

@@ -51,7 +51,7 @@ class _StubOAuth:
     def __init__(self):
         self.calls = []
 
-    def refresh(self, provider, refresh_token):
+    def refresh(self, provider, refresh_token, provider_data=None):
         self.calls.append((provider, refresh_token))
         return {"api_key": "FRESH", "refresh_token": refresh_token, "token_expiry": 9_999_999_999}
 

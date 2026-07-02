@@ -93,6 +93,7 @@ class CampaignStatus(StrEnum):
     running = "running"            # a phase is executing
     awaiting_user = "awaiting_user"  # phase done; waiting for continue/stop
     hardened = "hardened"          # no new surface for N phases — likely well-protected
+    completed = "completed"        # autopilot ran its full phase budget and stopped on its own
     stopped = "stopped"            # operator ended it
     error = "error"
 
@@ -128,6 +129,14 @@ class CampaignConfig(BaseModel):
     base_url: str | None = None
     authorized_targets: set[str] = Field(default_factory=set)
     phase_step_budget: int = 8
+    # Autopilot: chain phases back-to-back with no operator pause, so a single request drives
+    # the whole engagement to a stop condition. ``max_phases`` bounds it (budget + safety);
+    # the campaign flips to ``hardened`` (target looks protected) or ``completed`` (budget spent)
+    # on its own. ``auto_approve_mutating`` additionally lets state-changing actions run without
+    # being held for approval — full independent execution, still behind the authorized-scope gate.
+    autopilot: bool = False
+    max_phases: int = 6
+    auto_approve_mutating: bool = False
     # Stealth is ON by default for campaigns (the brief: "always pentest in silence").
     opsec_min_interval: float = 2.0
     opsec_jitter: float = 2.0

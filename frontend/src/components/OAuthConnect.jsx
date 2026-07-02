@@ -20,13 +20,15 @@ const inputCls =
  * account. Its own component so the API-key form in ConnectModal stays simple.
  *
  * @param {{
- *   provider: { id: string, label: string, flow?: string, risk?: boolean },
+ *   provider: { id: string, label: string, flow?: string, risk?: boolean,
+ *               models?: string[], default_model?: string },
  *   t: Record<string, any>,
  *   onConnected: () => void,
  * }} props
  */
 export default function OAuthConnect({ provider, t, onConnected }) {
   const [label, setLabel] = useState("");
+  const [model, setModel] = useState(provider.default_model || "");
   const [session, setSession] = useState(null); // { session_id, flow, user_code, verification_uri, authorize_url, interval }
   const [phase, setPhase] = useState("idle"); // idle | starting | waiting | done | error
   const [err, setErr] = useState("");
@@ -48,6 +50,7 @@ export default function OAuthConnect({ provider, t, onConnected }) {
     setErr("");
     setCode("");
     setLabel("");
+    setModel(provider.default_model || "");
   }, [provider, stopPoll]);
 
   const pollOnce = useCallback(
@@ -74,7 +77,7 @@ export default function OAuthConnect({ provider, t, onConnected }) {
     setPhase("starting");
     setErr("");
     try {
-      const s = await oauthStart(provider.id);
+      const s = await oauthStart(provider.id, model);
       setSession(s);
       if (s.flow === "device") {
         setPhase("waiting");
@@ -86,7 +89,7 @@ export default function OAuthConnect({ provider, t, onConnected }) {
       setErr(String(e.message || e));
       setPhase("error");
     }
-  }, [provider.id, pollOnce]);
+  }, [provider.id, model, pollOnce]);
 
   const onComplete = useCallback(async () => {
     if (!session || !code.trim()) return;
@@ -129,6 +132,41 @@ export default function OAuthConnect({ provider, t, onConnected }) {
           disabled={phase === "waiting"}
         />
       </label>
+
+      {provider.models?.length > 0 && (
+        <label className="block">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1 block">
+            {t.rtModel}
+          </span>
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className={inputCls}
+            placeholder="model id"
+            disabled={phase === "waiting"}
+          />
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <span className="text-[10.5px] font-mono uppercase tracking-wider text-zinc-600 self-center">
+              {t.pvModelSuggest}
+            </span>
+            {provider.models.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModel(m)}
+                disabled={phase === "waiting"}
+                className={`px-2 py-0.5 text-[11px] font-mono border transition-colors disabled:opacity-40 ${
+                  model === m
+                    ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/[0.08]"
+                    : "border-white/[0.08] text-zinc-400 hover:text-zinc-100 hover:border-white/20"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </label>
+      )}
 
       {phase === "idle" && (
         <button

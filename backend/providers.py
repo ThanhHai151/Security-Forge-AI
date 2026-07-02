@@ -33,7 +33,9 @@ A ``{placeholder}`` in a base URL means the user must fill in a value (e.g. an A
 Two network helpers, both best-effort and credential-free on SecForge's side:
 
 * ``probe_models`` — lists what an endpoint exposes (``GET <base>/models``) for the dropdown.
-* ``check_endpoint`` — a one-token probe so the UI can show a green/red "this works" signal.
+* ``check_endpoint`` — a one-token probe so the UI can show a works / valid-but-limited / failed
+  signal. It classifies the HTTP outcome (see ``_classify``) so a rate-limited or wrong-model key
+  reads as "key accepted, but…" rather than a rejected credential.
 
 Nothing here installs or downloads anything.
 """
@@ -139,18 +141,11 @@ PROVIDER_TYPES: list[dict[str, Any]] = [
        default_model="qwen3-coder-plus", tier="free", auth="oauth", flow="device",
        models=["qwen3-coder-plus", "qwen3-coder-flash", "coder-model", "vision-model"],
        docs="https://chat.qwen.ai", note="Qwen device-code sign-in (OpenAI shape)."),
-    _p("gemini-cli", "Gemini CLI", "oauth",
-       base_url="https://cloudcode-pa.googleapis.com/v1internal",
-       default_model="gemini-2.5-pro", tier="free", auth="oauth", flow="pkce",
-       api_style="gemini-cli", docs="https://github.com/google-gemini/gemini-cli",
-       models=["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3-pro-preview",
-               "gemini-3-flash-preview"],
-       note="Google OAuth (Code Assist). Internal API shape — sign-in works; not yet drivable."),
-    _p("kiro", "Kiro AI", "oauth", base_url="https://runtime.us-east-1.kiro.dev",
-       tier="free", auth="oauth", flow="device",
-       api_style="kiro", docs="https://kiro.dev",
-       models=["claude-sonnet-4.5", "claude-haiku-4.5", "deepseek-3.2"],
-       note="AWS SSO OIDC device sign-in. Proprietary API shape — sign-in only for now."),
+    # NOTE: gemini-cli and kiro sign in via OAuth device/PKCE flows too, but they grant access
+    # to a genuinely free consumer quota (Google/AWS), not a paid subscription — mirroring
+    # 9Router's own registry (open-sse/providers/registry/{gemini-cli,kiro}.js are both
+    # `category: "free"`), they live in the Free tier section below, not here, so this list
+    # stays exactly "sign in with a subscription you already pay for."
 
     # ── Free tier / keyless hosted ────────────────────────────────────────────
     _p("openrouter", "OpenRouter", "free", base_url="https://openrouter.ai/api/v1",
@@ -167,11 +162,13 @@ PROVIDER_TYPES: list[dict[str, Any]] = [
        note="Free NIM inference endpoints."),
     _p("gemini", "Gemini", "free",
        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
-       default_model="gemini-2.0-flash", tier="free",
+       default_model="gemini-2.5-flash", tier="free",
        docs="https://aistudio.google.com/apikey",
-       models=["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro",
-               "gemini-2.5-flash-lite"],
-       note="Google Gemini via its OpenAI-compatible endpoint. Generous free tier."),
+       models=["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash",
+               "gemini-2.5-pro"],
+       note="Google Gemini via its OpenAI-compatible endpoint. As of testing, only "
+       "gemini-2.5-flash and gemini-2.5-flash-lite reliably have free-tier quota — "
+       "gemini-2.0-flash and gemini-2.5-pro often return 429 (limit: 0) on new API keys."),
     _p("ollama-cloud", "Ollama Cloud", "free", base_url="https://ollama.com/v1",
        tier="free", docs="https://ollama.com",
        models=["gpt-oss:120b", "qwen3:235b", "deepseek-v3.1", "kimi-k2"],
@@ -192,9 +189,26 @@ PROVIDER_TYPES: list[dict[str, Any]] = [
        tier="free", docs="https://cloud.google.com/vertex-ai",
        models=["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
        note="Google Vertex AI — fill in {region}; needs a GCP bearer token."),
-    _p("opencode", "OpenCode Free", "free", base_url="https://opencode.ai/zen/free/v1",
-       tier="free", auth="none", docs="https://opencode.ai",
-       note="Keyless free tier from OpenCode Zen."),
+    _p("opencode", "OpenCode Free", "free", base_url="https://opencode.ai/zen/v1",
+       default_model="claude-haiku-4-5", tier="free", auth="none", docs="https://opencode.ai",
+       models=["claude-haiku-4-5", "claude-sonnet-4-6", "gemini-3-flash", "gpt-5.4",
+               "gpt-5.4-mini"],
+       note="Keyless OpenCode Zen endpoint (mirrors 9Router's opencode.js). Anonymous access "
+       "has been flaky in testing — add OpenRouter too as a reliable fallback."),
+    _p("gemini-cli", "Gemini CLI", "free",
+       base_url="https://cloudcode-pa.googleapis.com/v1internal",
+       default_model="gemini-2.5-pro", tier="free", auth="oauth", flow="pkce",
+       api_style="gemini-cli", docs="https://github.com/google-gemini/gemini-cli",
+       models=["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3-pro-preview",
+               "gemini-3-flash-preview"],
+       note="Google OAuth (Code Assist) — a free consumer quota, not a paid subscription. "
+       "Drivable via the internal generateContent shape."),
+    _p("kiro", "Kiro AI", "free", base_url="https://runtime.us-east-1.kiro.dev",
+       tier="free", auth="oauth", flow="device",
+       api_style="kiro", docs="https://kiro.dev",
+       models=["claude-sonnet-4.5", "claude-haiku-4.5", "deepseek-3.2"],
+       note="AWS SSO OIDC device sign-in — a free AWS quota, not a paid subscription. "
+       "Fully wired: chat runs over CodeWhisperer's GenerateAssistantResponse."),
 
     # ── API key providers (bring your own key) ────────────────────────────────
     _p("openai", "OpenAI", "apikey", base_url="https://api.openai.com/v1",
@@ -207,113 +221,6 @@ PROVIDER_TYPES: list[dict[str, Any]] = [
        models=["claude-sonnet-4-6", "claude-opus-4-8", "claude-opus-4-6",
                "claude-haiku-4-5-20251001", "claude-3-5-sonnet-20241022"],
        note="Claude via the native Messages API (x-api-key)."),
-    _p("deepseek", "DeepSeek", "apikey", base_url="https://api.deepseek.com/v1",
-       default_model="deepseek-chat", docs="https://platform.deepseek.com",
-       models=["deepseek-chat", "deepseek-reasoner"],
-       note="Low-cost, strong reasoning models."),
-    _p("groq", "Groq", "apikey", base_url="https://api.groq.com/openai/v1",
-       default_model="llama-3.3-70b-versatile", tier="free", docs="https://console.groq.com/keys",
-       models=["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "qwen/qwen3-32b",
-               "meta-llama/llama-4-maverick-17b-128e-instruct"],
-       note="Very fast inference, generous free tier."),
-    _p("mistral", "Mistral", "apikey", base_url="https://api.mistral.ai/v1",
-       default_model="mistral-large-latest", docs="https://console.mistral.ai/api-keys",
-       models=["mistral-large-latest", "mistral-medium-latest", "codestral-latest"]),
-    _p("xai", "xAI (Grok)", "apikey", base_url="https://api.x.ai/v1",
-       default_model="grok-4", docs="https://console.x.ai", note="Grok models.",
-       models=["grok-4", "grok-3", "grok-code-fast-1", "grok-4-fast-reasoning"]),
-    _p("cerebras", "Cerebras", "apikey", base_url="https://api.cerebras.ai/v1",
-       default_model="llama-3.3-70b", tier="free", docs="https://cloud.cerebras.ai",
-       models=["llama-3.3-70b", "gpt-oss-120b", "qwen-3-32b", "llama-4-scout-17b-16e-instruct"],
-       note="Extremely fast wafer-scale inference."),
-    _p("perplexity", "Perplexity", "apikey", base_url="https://api.perplexity.ai",
-       default_model="sonar", docs="https://www.perplexity.ai/settings/api",
-       models=["sonar", "sonar-pro", "sonar-reasoning"]),
-    _p("together", "Together AI", "apikey", base_url="https://api.together.xyz/v1",
-       default_model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
-       docs="https://api.together.xyz/settings/api-keys",
-       models=["meta-llama/Llama-3.3-70B-Instruct-Turbo", "deepseek-ai/DeepSeek-R1",
-               "Qwen/Qwen3-235B-A22B", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"]),
-    _p("fireworks", "Fireworks AI", "apikey", base_url="https://api.fireworks.ai/inference/v1",
-       default_model="accounts/fireworks/models/llama-v3p3-70b-instruct",
-       docs="https://fireworks.ai/account/api-keys",
-       models=["accounts/fireworks/models/llama-v3p3-70b-instruct",
-               "accounts/fireworks/models/qwen3-235b-a22b",
-               "accounts/fireworks/models/deepseek-v3p1"]),
-    _p("hyperbolic", "Hyperbolic", "apikey", base_url="https://api.hyperbolic.xyz/v1",
-       default_model="meta-llama/Llama-3.3-70B-Instruct", docs="https://app.hyperbolic.xyz",
-       models=["meta-llama/Llama-3.3-70B-Instruct", "deepseek-ai/DeepSeek-V3", "Qwen/QwQ-32B",
-               "Qwen/Qwen2.5-72B-Instruct"]),
-    _p("nebius", "Nebius AI", "apikey", base_url="https://api.studio.nebius.ai/v1",
-       default_model="meta-llama/Llama-3.3-70B-Instruct", docs="https://studio.nebius.ai",
-       models=["meta-llama/Llama-3.3-70B-Instruct", "deepseek-ai/DeepSeek-V3",
-               "Qwen/Qwen2.5-72B-Instruct"]),
-    _p("siliconflow", "SiliconFlow", "apikey", base_url="https://api.siliconflow.com/v1",
-       default_model="deepseek-ai/DeepSeek-V3", docs="https://siliconflow.com",
-       models=["deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct",
-               "meta-llama/Llama-3.3-70B-Instruct"]),
-    _p("chutes", "Chutes AI", "apikey", base_url="https://llm.chutes.ai/v1",
-       docs="https://chutes.ai",
-       models=["deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct"]),
-    _p("cohere", "Cohere", "apikey", base_url="https://api.cohere.ai/compatibility/v1",
-       default_model="command-r-plus", docs="https://dashboard.cohere.com/api-keys",
-       models=["command-r-plus", "command-r", "command-a-03-2025"],
-       note="Cohere via its OpenAI-compatible endpoint."),
-    _p("blackbox", "Blackbox AI", "apikey", base_url="https://api.blackbox.ai/v1",
-       docs="https://www.blackbox.ai",
-       models=["blackboxai/openai/gpt-4o", "blackboxai/anthropic/claude-3.5-sonnet"]),
-    _p("commandcode", "Command Code", "apikey", base_url="https://api.commandcode.ai/alpha",
-       docs="https://commandcode.ai",
-       note="Non-standard generate API — may need the Custom card instead."),
-    _p("kimi", "Kimi (Moonshot)", "apikey", base_url="https://api.moonshot.cn/v1",
-       default_model="moonshot-v1-8k", docs="https://platform.moonshot.cn",
-       models=["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-k2-0711-preview"],
-       note="Moonshot Kimi (OpenAI shape). Kimi Coding uses the Anthropic shape."),
-    _p("glm-coding", "GLM Coding", "apikey", base_url="https://api.z.ai/api/anthropic/v1",
-       default_model="glm-4.6", api_style="anthropic", docs="https://z.ai",
-       models=["glm-4.6", "glm-4.5", "glm-4.5-air"],
-       note="Zhipu GLM coding plan via the Anthropic-compatible endpoint."),
-    _p("glm-cn", "GLM (China)", "apikey", base_url="https://open.bigmodel.cn/api/paas/v4",
-       default_model="glm-4-plus", docs="https://open.bigmodel.cn",
-       models=["glm-4-plus", "glm-4-air", "glm-4-flash", "glm-4.6"],
-       note="Zhipu GLM (mainland) OpenAI-compatible endpoint."),
-    _p("minimax", "Minimax", "apikey", base_url="https://api.minimax.io/anthropic/v1",
-       default_model="MiniMax-M2", api_style="anthropic", docs="https://www.minimax.io",
-       models=["MiniMax-M2", "MiniMax-M2.1"],
-       note="Minimax (international) via the Anthropic-compatible endpoint."),
-    _p("minimax-cn", "Minimax (China)", "apikey",
-       base_url="https://api.minimaxi.com/anthropic/v1", default_model="MiniMax-M2",
-       api_style="anthropic", docs="https://www.minimaxi.com",
-       models=["MiniMax-M2", "MiniMax-M2.1"]),
-    _p("alibaba", "Alibaba (Qwen)", "apikey",
-       base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-       default_model="qwen-plus", docs="https://dashscope.console.aliyun.com",
-       models=["qwen-plus", "qwen-max", "qwen-turbo", "qwen3-coder-plus"],
-       note="Alibaba DashScope (mainland) OpenAI-compatible mode."),
-    _p("alibaba-intl", "Alibaba Intl", "apikey",
-       base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-       default_model="qwen-plus", docs="https://dashscope-intl.console.aliyun.com",
-       models=["qwen-plus", "qwen-max", "qwen-turbo", "qwen3-coder-plus"]),
-    _p("volcengine", "Volcengine Ark", "apikey",
-       base_url="https://ark.cn-beijing.volces.com/api/v3",
-       docs="https://www.volcengine.com/product/ark",
-       note="Volcengine Ark — model id is an endpoint id (ep-…)."),
-    _p("xiaomi-mimo", "Xiaomi MiMo", "apikey", base_url="https://api.xiaomimimo.com/v1",
-       docs="https://xiaomimimo.com", models=["mimo-v2.5", "mimo-v2.5-pro"]),
-    _p("xiaomi-tokenplan", "Xiaomi MiMo (Token Plan)", "apikey",
-       base_url="https://token-plan-sgp.xiaomimimo.com/v1",
-       docs="https://xiaomimimo.com", models=["mimo-v2.5", "mimo-v2.5-pro"],
-       note="Singapore region; other regions available."),
-    _p("opencode-go", "OpenCode Go", "apikey", base_url="https://opencode.ai/zen/go/v1",
-       docs="https://opencode.ai"),
-    _p("azure-openai", "Azure OpenAI", "apikey",
-       base_url="https://{resource}.openai.azure.com/openai/v1",
-       docs="https://learn.microsoft.com/azure/ai-services/openai",
-       note="Replace {resource}; the model is your deployment name; keys use the api-key header."),
-    _p("vertex-partner", "Vertex Partner", "apikey",
-       base_url="https://aiplatform.googleapis.com",
-       docs="https://cloud.google.com/vertex-ai",
-       note="Vertex AI partner (MaaS) models — needs a GCP bearer token."),
 
     # ── Local & private (no key; target data stays on your machine) ───────────
     _p("ollama", "Ollama", "local", base_url="http://localhost:11434/v1",
@@ -383,6 +290,59 @@ def _default_post(
         return exc.code, body
 
 
+# Substrings that mark an auth failure even when the HTTP status isn't 401/403 — e.g. Google's
+# OpenAI-compatible endpoint answers a *bad key* with 400 "Please pass a valid API key", not 401.
+_AUTH_HINTS: tuple[str, ...] = (
+    "api key", "api_key", "apikey", "unauthorized", "authentication", "invalid key",
+    "invalid token", "invalid x-api-key", "no api key", "missing authorization",
+    "missing authentication", "credential", "permission denied", "not authenticated",
+)
+
+
+def _classify(status: int, body: str) -> tuple[bool, str, str]:
+    """Map an HTTP outcome to ``(ok, reason, error)``.
+
+    A "Test" answers one question — is this credential usable? A non-2xx is *not* automatically a
+    bad key: a valid key is routinely rate-limited (429), points at a model with no quota, or has a
+    mistyped model id. Only 401/403 (or a body that says so) means the key was actually rejected.
+    ``reason`` (set only when not ok) lets the UI show a hard auth failure (red) apart from a
+    key-is-valid-but… state (amber), instead of flattening every non-2xx into "Failed":
+
+      ``auth``         — key rejected: 401/403, or an auth-worded 4xx (Gemini's 400).
+      ``rate_limited`` — 429: the key authenticated; it's just throttled / out of quota.
+      ``reachable``    — other 4xx: the endpoint answered past auth (bad model id / unsupported
+                         param), so the credential itself looks accepted.
+      ``server``       — 5xx: a provider-side error, not a key problem.
+      ``unreachable``  — no HTTP response (transport error / timeout; status 0).
+    """
+    if 200 <= status < 300:
+        return True, "", ""
+    err = (body or f"HTTP {status}")[:200]
+    text = (body or "").lower()
+    if status in (401, 403):
+        return False, "auth", err
+    if status == 429:
+        return False, "rate_limited", err
+    if 400 <= status < 500:
+        # Some providers signal a bad key with 400 rather than 401 — trust the body wording.
+        if any(hint in text for hint in _AUTH_HINTS):
+            return False, "auth", err
+        return False, "reachable", err
+    if status >= 500:
+        return False, "server", err
+    return False, "unreachable", err
+
+
+def _result(status: int, body: str) -> dict[str, Any]:
+    """Build ``{ok, status[, reason, error]}``. A 2xx stays minimal: ``{ok, status}``."""
+    ok, reason, err = _classify(status, body)
+    result: dict[str, Any] = {"ok": ok, "status": status}
+    if not ok:
+        result["reason"] = reason
+        result["error"] = err
+    return result
+
+
 def check_endpoint(
     base_url: str,
     api_key: str = "",
@@ -390,15 +350,23 @@ def check_endpoint(
     *,
     api_style: str = "openai",
     http_post: HttpPost | None = None,
-    timeout: float = 8.0,
+    timeout: float = 15.0,
 ) -> dict[str, Any]:
-    """One-token probe against ``base_url``. ``{ok, status, error?}`` — never raises.
+    """One-token probe against ``base_url``. ``{ok, status, reason?, error?}`` — never raises.
 
     ``api_style`` selects the wire shape: OpenAI ``chat/completions`` (Bearer) or Anthropic
     ``messages`` (x-api-key + version header), so an Anthropic-only endpoint is tested honestly.
+    A non-2xx is classified (see :func:`_classify`) so a valid-but-rate-limited or wrong-model key
+    isn't reported as a rejected credential. The timeout is generous so a cold model's first token
+    doesn't read as an unreachable endpoint.
     """
     if not base_url:
-        return {"ok": False, "status": 0, "error": "no base URL"}
+        return {"ok": False, "status": 0, "reason": "config", "error": "no base URL"}
+    post = http_post or _default_post
+    if api_style == "kiro":
+        return _check_kiro(api_key, post, timeout)
+    if api_style in ("gemini", "gemini-cli", "antigravity"):
+        return _check_gemini(base_url, api_key, model, api_style, post, timeout)
     anthropic = api_style == "anthropic"
     suffix = "/messages" if anthropic else "/chat/completions"
     url = base_url.rstrip("/") + suffix
@@ -420,13 +388,58 @@ def check_endpoint(
             "max_tokens": 1,
             "messages": [{"role": "user", "content": "ping"}],
         }
-    post = http_post or _default_post
     try:
         status, body = post(url, payload, headers, timeout)
     except (URLError, OSError) as exc:  # connection refused, DNS, timeout — endpoint unreachable
-        return {"ok": False, "status": 0, "error": str(getattr(exc, "reason", exc))}
-    ok = 200 <= status < 300
-    result: dict[str, Any] = {"ok": ok, "status": status}
-    if not ok:
-        result["error"] = (body or f"HTTP {status}")[:200]
-    return result
+        return {"ok": False, "status": 0, "reason": "unreachable",
+                "error": str(getattr(exc, "reason", exc))}
+    return _result(status, body)
+
+
+def _probe(post: HttpPost, url: str, payload: dict[str, Any], headers: dict[str, str],
+           timeout: float) -> dict[str, Any]:
+    """Shared ``{ok, status, reason?, error?}`` POST probe used by the per-style checks below."""
+    try:
+        status, body = post(url, payload, headers, timeout)
+    except (URLError, OSError) as exc:
+        return {"ok": False, "status": 0, "reason": "unreachable",
+                "error": str(getattr(exc, "reason", exc))}
+    return _result(status, body)
+
+
+def _check_kiro(api_key: str, post: HttpPost, timeout: float) -> dict[str, Any]:
+    """Validate a Kiro token cheaply by listing CodeWhisperer profiles (no quota spend)."""
+    if not api_key:
+        return {"ok": False, "status": 0, "reason": "auth", "error": "no token — sign in first"}
+    headers = {
+        "Content-Type": "application/x-amz-json-1.0",
+        "x-amz-target": "AmazonCodeWhispererService.ListAvailableProfiles",
+        "Authorization": f"Bearer {api_key}",
+        "Accept": "application/json",
+    }
+    url = "https://codewhisperer.us-east-1.amazonaws.com"
+    return _probe(post, url, {"maxResults": 1}, headers, timeout)
+
+
+def _check_gemini(base_url: str, api_key: str, model: str, api_style: str,
+                  post: HttpPost, timeout: float) -> dict[str, Any]:
+    """One-token ``generateContent`` ping for the Gemini family."""
+    if not api_key:
+        return {"ok": False, "status": 0, "reason": "auth", "error": "no token — sign in first"}
+    base = base_url.rstrip("/")
+    request = {
+        "contents": [{"role": "user", "parts": [{"text": "ping"}]}],
+        "generationConfig": {"maxOutputTokens": 1},
+    }
+    if api_style == "gemini":
+        url = f"{base}/models/{model or 'gemini-2.5-flash'}:generateContent"
+        headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+        payload: dict[str, Any] = request
+    else:  # gemini-cli / antigravity — bearer + wrapped body
+        url = f"{base}:generateContent"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+        payload = {"model": model or "gemini-2.5-flash", "request": request}
+        if api_style == "antigravity":
+            headers["x-request-source"] = "local"
+            payload["requestType"] = "agent"
+    return _probe(post, url, payload, headers, timeout)

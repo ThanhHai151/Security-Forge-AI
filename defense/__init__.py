@@ -9,14 +9,28 @@ proposals. See ``defense/README.md``.
 
 from __future__ import annotations
 
+from defense.deps import (
+    Advisory,
+    Dependency,
+    DependencyFinding,
+    DependencyReport,
+    parse_dependencies,
+    scan_dependencies,
+)
 from defense.review import DefenseReport, Finding, recheck, review_path
 from defense.signatures import Signature, default_signatures
 
 __all__ = [
+    "Advisory",
     "DefenseReport",
+    "Dependency",
+    "DependencyFinding",
+    "DependencyReport",
     "Finding",
-    "review_path",
-    "recheck",
     "Signature",
     "default_signatures",
+    "parse_dependencies",
+    "recheck",
+    "review_path",
+    "scan_dependencies",
 ]

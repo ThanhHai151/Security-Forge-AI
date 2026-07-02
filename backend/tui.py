@@ -27,14 +27,16 @@ def _ask(prompt: str, default: str = "") -> str:
 
 
 def _choose_backend() -> str:
-    print("\nBackends:")
-    for i, name in enumerate(BACKENDS, 1):
-        note = " (no API key needed)" if name == "offline" else ""
-        print(f"  {i}) {name}{note}")
-    raw = _ask("Choose backend", "1")
+    from backend.ui import Choice, select
+
+    choices = [
+        Choice(str(i), name, "no API key needed" if name == "offline" else "requires API key")
+        for i, name in enumerate(BACKENDS, 1)
+    ]
+    raw = select(choices, title="Model backend", default="1")
     if raw in BACKENDS:
         return raw
-    if raw.isdigit() and 1 <= int(raw) <= len(BACKENDS):
+    if raw and raw.isdigit() and 1 <= int(raw) <= len(BACKENDS):
         return BACKENDS[int(raw) - 1]
     return "offline"
 
@@ -69,8 +71,9 @@ def _stream_run(config: RunConfig) -> Run:
 
 
 def run_tui() -> None:
-    print("SecForge - Terminal UI")
-    print("Drive the agent loop from the terminal. Ctrl-C to quit.\n")
+    from backend.ui import banner
+
+    banner("SecForge", "Terminal UI · drive the agent loop · Ctrl-C to quit")
     while True:
         goal = _ask("Goal", "Recon the target")
         target = _ask("Target", "http://localhost:8000")

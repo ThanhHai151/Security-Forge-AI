@@ -8,6 +8,7 @@ import {
   CircleNotch,
   CheckCircle,
   XCircle,
+  Warning,
   Lightning,
 } from "@phosphor-icons/react";
 
@@ -38,6 +39,10 @@ function Field({ label, hint, children }) {
   );
 }
 
+// A non-2xx doesn't always mean a bad key. These reasons prove the credential was accepted
+// (rate-limited, wrong model, provider hiccup) — show them amber ("valid, but…"), not red.
+const SOFT_FAIL = { rate_limited: "pvTestLimited", reachable: "pvTestReachable", server: "pvTestServer" };
+
 function TestPill({ result, t }) {
   if (!result) return null;
   if (result.pending)
@@ -46,17 +51,23 @@ function TestPill({ result, t }) {
         <CircleNotch size={12} className="animate-spin" /> {t.pvTesting}
       </span>
     );
-  return result.ok ? (
-    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
-      <CheckCircle size={12} weight="fill" /> {t.pvTestOk}
-      {result.status ? ` (${result.status})` : ""}
-    </span>
-  ) : (
+  if (result.ok)
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
+        <CheckCircle size={12} weight="fill" /> {t.pvTestOk}
+        {result.status ? ` (${result.status})` : ""}
+      </span>
+    );
+  const softKey = SOFT_FAIL[result.reason];
+  return (
     <span
-      className="inline-flex items-center gap-1 text-[11px] text-red-400 max-w-[30ch] truncate"
+      className={`inline-flex items-center gap-1 text-[11px] max-w-[32ch] truncate ${
+        softKey ? "text-amber-400" : "text-red-400"
+      }`}
       title={result.error || `HTTP ${result.status}`}
     >
-      <XCircle size={12} weight="fill" /> {t.pvTestFail}
+      {softKey ? <Warning size={12} weight="fill" /> : <XCircle size={12} weight="fill" />}{" "}
+      {softKey ? t[softKey] : t.pvTestFail}
       {result.status ? ` (${result.status})` : ""}
     </span>
   );

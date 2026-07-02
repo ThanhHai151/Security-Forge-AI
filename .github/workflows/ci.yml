@@ -16,7 +16,7 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Lint
         run: |
-          ruff check ai_framework backend knowledge_base vuln_search defense labs i18n tests
-          mypy ai_framework backend knowledge_base vuln_search defense labs i18n
+          ruff check ai_framework backend knowledge_base vuln_search defense i18n tests
+          mypy ai_framework backend knowledge_base vuln_search defense i18n
       - name: Test
         run: pytest

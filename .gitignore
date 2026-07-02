@@ -18,6 +18,7 @@ campaigns_store/
 # Tooling state
 .serena/
 ai_accounts.json
+ai_usage.json
 memory_store.jsonl
 
 .claude/

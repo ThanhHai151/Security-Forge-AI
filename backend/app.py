@@ -16,8 +16,13 @@ API routes (with or without the ``/api`` prefix):
     GET  /runs                 -> 200 {"runs": [summaries]}    (persisted run history)
     GET  /runs/{id}            -> 200 <Run JSON> | 404   (outcome=="incomplete" => running)
     GET  /runs/{id}/report?format=md|json -> 200 report | 404  (findings as pentest report)
+    POST /runs/{id}/stop       -> 200 {ok} | 409  (Stop button — signal the loop to end)
     POST /campaigns            body: {domain, backend?, model?, authorized_targets?,
-                                      phase_step_budget?} -> 201 {"id": ...}  (continuous run)
+                                      phase_step_budget?, autopilot?, max_phases?,
+                                      auto_approve_mutating?} -> 201 {"id": ...}  (continuous run)
+    POST /pentest              body: {target|domain, backend?, model?, authorized_targets?,
+                                      max_phases?, auto_approve_mutating?} -> 201 {"id": ...}
+                                      (one-shot AUTONOMOUS pentest: just give an address)
     GET  /campaigns            -> 200 {"campaigns": [summaries]}
     GET  /campaigns/{id}       -> 200 <Campaign JSON + phase_runs> | 404
     POST /campaigns/{id}/continue|stop           -> 200 {"ok": bool} | 409
@@ -30,6 +35,11 @@ API routes (with or without the ``/api`` prefix):
     PATCH  /accounts/{id}      -> 200 {account} | 404      body: partial fields
     DELETE /accounts/{id}      -> 200 {ok} | 404
     GET    /accounts/{id}/models -> 200 {models:[...]}
+    GET    /accounts/export?include_keys=0|1 -> 200 {version, policy, accounts:[...]}  (backup)
+    POST   /accounts/import    -> 200 {added, skipped} | 400   body: {accounts:[...], mode?}
+    GET    /usage              -> 200 {accounts:[{id,label,limits,total,today,health}]}  (quota)
+    POST   /usage/reset        -> 200 {ok}                 body: {account_id?}  (all when absent)
+    GET    /models             -> 200 {accounts:[...], catalog:[{provider,label,models}]}
     POST   /accounts/{id}/test -> 200 {ok, status, error?} | 404   (live probe, stored key)
     POST   /probe-models       -> 200 {models:[...]}       body: {base_url, api_key?}
     POST   /test-connection    -> 200 {ok,status,error?} body: {base_url,api_key?,model?,api_style?}
@@ -44,6 +54,9 @@ API routes (with or without the ``/api`` prefix):
     GET    /kb/search?q=&mode=&locale= -> 200 {hits}             (mode=full|errors)
     GET    /vuln-search?q=&online=&locale= -> 200 {techniques, cves}
     POST   /defense/review     -> 200 <DefenseReport> | 400      body: {path}
+    POST   /defense/scan       -> 200 {code_review, dependencies, campaign_id?} | 400
+                                  body: {path, deps_online?, serve_url?, backend?, model?}
+                                  (code signatures + SCA; optional live attack of a running app)
     GET    /i18n/{locale}      -> 200 {locale, available, strings, glossary}
 
 Any non-API GET falls through to ``static_root`` (SPA: unknown paths return index.html).
@@ -79,6 +92,96 @@ def _router_view(service: RunService) -> dict[str, Any]:
         {**a.masked(), "health": health.get(a.id, {})} for a in service.accounts.list_accounts()
     ]
     return {"policy": service.accounts.get_policy(), "accounts": accounts}
+
+
+def _usage_view(service: RunService) -> dict[str, Any]:
+    """Per-account quota view: persisted usage (calls + tokens) + limits + live health."""
+    usage = service.usage.snapshot()
+    health = health_snapshot()
+    accounts = []
+    for a in service.accounts.list_accounts():
+        u = usage.get(a.id, {})
+        accounts.append({
+            "id": a.id, "label": a.label, "kind": a.kind, "tier": a.tier,
+            "enabled": a.enabled, "model": a.model,
+            "limits": {
+                "daily_requests": a.quota_daily_requests,
+                "daily_tokens": a.quota_daily_tokens,
+            },
+            "total": u.get("total", {}),
+            "today": u.get("today", {}),
+            "first_used": u.get("first_used", ""),
+            "last_used": u.get("last_used", ""),
+            "health": health.get(a.id, {}),
+        })
+    return {"accounts": accounts}
+
+
+def _models_view(service: RunService) -> dict[str, Any]:
+    """Pool-wide model overview: each account's current model + the catalog's suggestions.
+
+    Live per-account model lists stay on-demand (``GET /accounts/{id}/models``) so this stays a
+    cheap, network-free response the Models popup can render instantly.
+    """
+    accounts = [
+        {"id": a.id, "label": a.label, "kind": a.kind, "model": a.model,
+         "api_style": a.api_style, "enabled": a.enabled, "base_url": a.base_url}
+        for a in service.accounts.list_accounts()
+    ]
+    catalog = [
+        {"provider": p["id"], "label": p["label"], "models": p["models"]}
+        for p in PROVIDER_TYPES if p.get("models")
+    ]
+    return {"accounts": accounts, "catalog": catalog}
+
+
+def _export_accounts(service: RunService, include_keys: bool) -> dict[str, Any]:
+    """Serialize every account for download/backup. Secrets are included only when asked."""
+    rows = []
+    for a in service.accounts.list_accounts():
+        row = a.model_dump()
+        if not include_keys:  # scrub every credential-bearing field for a shareable preset
+            row["api_key"] = ""
+            row["refresh_token"] = ""
+            row["provider_data"] = {}
+        rows.append(row)
+    return {
+        "version": 1,
+        "kind": "secforge-accounts",
+        "include_keys": include_keys,
+        "policy": service.accounts.get_policy(),
+        "accounts": rows,
+    }
+
+
+def _import_accounts(service: RunService, rows: Any, mode: str) -> dict[str, Any]:
+    """Add accounts from an uploaded export. ``replace`` clears the pool first; ``merge`` dedupes
+    on (kind, base_url, label). Incoming ids are dropped so imports never collide."""
+    if not isinstance(rows, list):
+        raise ValueError("'accounts' must be a list")
+    if mode == "replace":
+        for a in service.accounts.list_accounts():
+            service.accounts.remove(a.id)
+    seen = {(a.kind, a.base_url, a.label) for a in service.accounts.list_accounts()}
+    added, skipped = 0, 0
+    for row in rows:
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        fields = {k: v for k, v in row.items() if k != "id"}  # fresh id on import
+        try:
+            account = Account.model_validate(fields)
+        except Exception:  # noqa: BLE001 - a malformed row is skipped, not fatal
+            skipped += 1
+            continue
+        key = (account.kind, account.base_url, account.label)
+        if key in seen:
+            skipped += 1
+            continue
+        service.accounts.add(account)
+        seen.add(key)
+        added += 1
+    return {"added": added, "skipped": skipped}
 
 
 def _strip_api_prefix(path: str) -> str:
@@ -121,7 +224,7 @@ def make_handler(
             return json.loads(self.rfile.read(length) or b"{}")
 
         # ── POST ──
-        def do_POST(self) -> None:  # noqa: N802 - http.server API
+        def _post_impl(self) -> None:
             path = _strip_api_prefix(urlparse(self.path).path)
             if path == "/runs":
                 try:
@@ -129,12 +232,27 @@ def make_handler(
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
                 return self._send(201, {"id": service.start_run(config)})
+            if path.startswith("/runs/") and path.endswith("/stop"):
+                rid = path[len("/runs/") : -len("/stop")]
+                ok = service.stop_run(rid)
+                return self._send(200 if ok else 409, {"ok": ok})
             if path == "/campaigns":
                 try:
                     cfg = CampaignConfig.model_validate(self._body())
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
                 return self._send(201, {"id": service.start_campaign(cfg)})
+            if path == "/pentest":
+                # One-shot autonomous pentest: caller supplies only an address. Accept it under
+                # either "target" or "domain"; autopilot is forced on so a single request drives
+                # the whole engagement to a stop condition.
+                body = self._body()
+                body.setdefault("domain", body.get("target", ""))
+                try:
+                    cfg = CampaignConfig.model_validate(body)
+                except Exception as exc:  # noqa: BLE001
+                    return self._send(400, {"error": str(exc)})
+                return self._send(201, {"id": service.start_pentest(cfg)})
             if path.startswith("/campaigns/"):
                 rest = path[len("/campaigns/") :]
                 body = self._body()
@@ -157,6 +275,18 @@ def make_handler(
                     return self._send(400, {"error": str(exc)})
                 service.accounts.add(account)
                 return self._send(201, account.masked())
+            if path == "/accounts/import":
+                b = self._body()
+                try:
+                    result = _import_accounts(
+                        service, b.get("accounts"), b.get("mode", "merge")
+                    )
+                except ValueError as exc:
+                    return self._send(400, {"error": str(exc)})
+                return self._send(200, result)
+            if path == "/usage/reset":
+                service.usage.reset(self._body().get("account_id") or None)
+                return self._send(200, {"ok": True})
             if path == "/probe-models":
                 b = self._body()
                 models = probe_models(b.get("base_url", ""), b.get("api_key", ""))
@@ -186,8 +316,11 @@ def make_handler(
                 )
             # ── OAuth sign-in flows ──
             if path == "/oauth/start":
+                b = self._body()
                 try:
-                    return self._send(200, oauth.start(self._body().get("provider", "")))
+                    return self._send(
+                        200, oauth.start(b.get("provider", ""), b.get("model", ""))
+                    )
                 except OAuthError as exc:
                     return self._send(400, {"error": str(exc)})
             if path == "/oauth/poll":
@@ -208,6 +341,25 @@ def make_handler(
                     return self._send(400, {"error": str(exc)})
                 masked = _create_oauth_account(result["account"], b.get("label", ""))
                 return self._send(201, {"status": "done", "account": masked})
+            if path == "/oauth/import":
+                # Non-interactive connect: paste a refresh token or an API key (e.g. Kiro).
+                b = self._body()
+                provider = b.get("provider", "")
+                method = b.get("method", "import")
+                try:
+                    if method == "api_key":
+                        result = oauth.import_api_key(
+                            provider, b.get("api_key", ""), b.get("region", "us-east-1"),
+                            b.get("model", ""),
+                        )
+                    else:
+                        result = oauth.import_token(
+                            provider, b.get("token", ""), b.get("model", "")
+                        )
+                except OAuthError as exc:
+                    return self._send(400, {"error": str(exc)})
+                masked = _create_oauth_account(result["account"], b.get("label", ""))
+                return self._send(201, {"status": "done", "account": masked})
             if path == "/router/policy":
                 try:
                     policy = service.accounts.set_policy(self._body()["policy"])
@@ -220,10 +372,27 @@ def make_handler(
                     return self._send(400, {"error": "missing 'path'"})
                 report = service.pillars.defense_review(target)
                 return self._send(400 if "error" in report else 200, report)
+            if path == "/defense/scan":
+                # Combined assessment: code signatures + dependency (SCA) inventory, plus an
+                # optional live attack of the running app when ``serve_url`` is supplied.
+                body = self._body()
+                target = body.get("path", "")
+                if not target:
+                    return self._send(400, {"error": "missing 'path'"})
+                report = service.defense_autopilot(
+                    target,
+                    serve_url=body.get("serve_url") or None,
+                    deps_online=bool(body.get("deps_online", False)),
+                    backend=body.get("backend", "offline"),
+                    model=body.get("model"),
+                    base_url=body.get("base_url"),
+                    authorized_targets=set(body.get("authorized_targets", []) or []),
+                )
+                return self._send(400 if "error" in report else 200, report)
             return self._send(404, {"error": "not found"})
 
         # ── PATCH ──
-        def do_PATCH(self) -> None:  # noqa: N802 - http.server API
+        def _patch_impl(self) -> None:
             path = _strip_api_prefix(urlparse(self.path).path)
             if path.startswith("/accounts/"):
                 acct = service.accounts.update(path.removeprefix("/accounts/"), self._body())
@@ -233,7 +402,7 @@ def make_handler(
             return self._send(404, {"error": "not found"})
 
         # ── DELETE ──
-        def do_DELETE(self) -> None:  # noqa: N802 - http.server API
+        def _delete_impl(self) -> None:
             path = _strip_api_prefix(urlparse(self.path).path)
             if path.startswith("/accounts/"):
                 ok = service.accounts.remove(path.removeprefix("/accounts/"))
@@ -243,7 +412,7 @@ def make_handler(
             return self._send(404, {"error": "not found"})
 
         # ── GET ──
-        def do_GET(self) -> None:  # noqa: N802 - http.server API
+        def _get_impl(self) -> None:
             parsed = urlparse(self.path)
             path = _strip_api_prefix(parsed.path)
             if path == "/provider-types":
@@ -251,11 +420,19 @@ def make_handler(
             if path == "/oauth/providers":
                 return self._send(200, {
                     pid: {"flow": p.flow, "supported": p.supported,
-                          "reason": p.unsupported_reason}
+                          "reason": p.unsupported_reason, "methods": list(p.methods)}
                     for pid, p in OAUTH_PROVIDERS.items()
                 })
             if path == "/accounts":
                 return self._send(200, _router_view(service))
+            if path == "/accounts/export":
+                inc = (parse_qs(parsed.query).get("include_keys") or ["0"])[0]
+                include_keys = inc in {"1", "true", "yes"}
+                return self._send(200, _export_accounts(service, include_keys))
+            if path == "/usage":
+                return self._send(200, _usage_view(service))
+            if path == "/models":
+                return self._send(200, _models_view(service))
             if path.startswith("/accounts/") and path.endswith("/models"):
                 aid = path[len("/accounts/") : -len("/models")]
                 acct = service.accounts.get(aid)
@@ -338,6 +515,27 @@ def make_handler(
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+
+        # ── dispatch: every verb is guarded so a bug always answers JSON, never a raw
+        # http.server error page (which broke the frontend's error parsing and looked like
+        # every provider had vanished, when only one endpoint's response body wasn't JSON).
+        def _guarded(self, impl: Any) -> None:
+            try:
+                impl()
+            except Exception as exc:  # noqa: BLE001 - last-resort handler, must not re-raise
+                self._send(500, {"error": f"{type(exc).__name__}: {exc}"})
+
+        def do_GET(self) -> None:  # noqa: N802 - http.server API
+            self._guarded(self._get_impl)
+
+        def do_POST(self) -> None:  # noqa: N802 - http.server API
+            self._guarded(self._post_impl)
+
+        def do_PATCH(self) -> None:  # noqa: N802 - http.server API
+            self._guarded(self._patch_impl)
+
+        def do_DELETE(self) -> None:  # noqa: N802 - http.server API
+            self._guarded(self._delete_impl)
 
         def log_message(self, *args: object) -> None:
             pass

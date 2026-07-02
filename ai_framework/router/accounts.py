@@ -16,7 +16,7 @@ import threading
 from pathlib import Path
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 # Fallback ordering for the "tiered" policy: paid subscriptions first (most reliable), then
 # pay-as-you-go, then free pools (most likely to rate-limit).
@@ -38,11 +38,20 @@ class Account(BaseModel):
     api_style: str = "openai"
     # Static headers to replay upstream (e.g. GitHub Copilot's editor headers).
     extra_headers: dict[str, str] = Field(default_factory=dict)
+    # Optional daily quota ceilings the user sets in the Quota Tracker (0 = no limit). Advisory:
+    # the tracker shows usage against them; the router does not hard-stop on them.
+    quota_daily_requests: int = 0
+    quota_daily_tokens: int = 0
     # OAuth bookkeeping — set only for accounts created via a sign-in flow. When ``oauth_provider``
     # is set and ``token_expiry`` has passed, the router refreshes ``api_key`` before use.
     oauth_provider: str = ""
     refresh_token: str = ""
     token_expiry: float = 0.0  # absolute epoch seconds; 0 => unknown / never expires
+    # Free-form per-provider connection state that doesn't fit the fixed columns above, e.g.
+    # Kiro's {authMethod, clientId, clientSecret, region, profileArn} or Antigravity's
+    # {projectId, tierId}. Persisted verbatim; may hold a (shared, reverse-engineered) client
+    # secret, so it is deliberately kept out of ``masked()``.
+    provider_data: dict[str, str] = Field(default_factory=dict)
 
     def masked(self) -> dict:
         """Public view: never expose the raw key or refresh token."""
@@ -58,6 +67,11 @@ class Account(BaseModel):
             "oauth_provider": self.oauth_provider,
             "key_set": bool(self.api_key),
             "key_hint": (self.api_key[-4:] if self.api_key else ""),
+            # Non-secret hint so the UI can label how this account was connected.
+            "auth_method": self.provider_data.get("authMethod", ""),
+            # Advisory daily ceilings shown/edited in the Quota Tracker (0 = no limit).
+            "quota_daily_requests": self.quota_daily_requests,
+            "quota_daily_tokens": self.quota_daily_tokens,
         }
 
 
@@ -83,11 +97,26 @@ class AccountStore:
 
     def _save(self, data: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        # Write-then-rename (same pattern as JsonRunStore.save) so a request landing mid-write —
+        # e.g. the Providers page polling /accounts every 5s — never sees a torn/truncated file.
+        tmp = self.path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(self.path)
 
     # ── accounts ──
     def list_accounts(self) -> list[Account]:
-        return [Account.model_validate(a) for a in self._load().get("accounts", [])]
+        """Every account that still validates against the current schema.
+
+        A single incompatible or corrupted row must not take the whole pool down — skip it
+        rather than raising, so one bad account doesn't 500 the entire Providers page.
+        """
+        accounts = []
+        for row in self._load().get("accounts", []):
+            try:
+                accounts.append(Account.model_validate(row))
+            except ValidationError:
+                continue
+        return accounts
 
     def add(self, account: Account) -> Account:
         with self._lock:

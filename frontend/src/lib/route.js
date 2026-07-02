@@ -10,8 +10,8 @@
  *   #/pentest          → pentest tool catalog
  *   #/vuln             → vuln search (catalog + CVE lookup)
  *   #/defense          → defense (codebase review)
- *   #/ai               → AI agent console
- *   #/auto             → Auto-Pentest terminal (continuous campaign)
+ *   #/agent            → Agent console (single Hermes run + continuous campaign, merged)
+ *   #/ai, #/auto       → back-compat: both fold into /agent (its own toggle picks the mode)
  *   #/router           → Providers (AI connection pool)
  *   #/<slug>           → back-compat: opens that doc under /docs
  */
@@ -32,8 +32,7 @@ export function parseRoute(hash) {
   if (head === "pentest") return { section: "pentest", slug: "" };
   if (head === "vuln") return { section: "vuln", slug: "" };
   if (head === "defense") return { section: "defense", slug: "" };
-  if (head === "ai") return { section: "ai", slug: "" };
-  if (head === "auto") return { section: "auto", slug: "" };
+  if (head === "agent" || head === "ai" || head === "auto") return { section: "agent", slug: "" };
   if (head === "router") return { section: "router", slug: "" };
 
   // Back-compat: a bare known slug (`#/sql_injection`) opens that doc.
