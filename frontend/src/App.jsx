@@ -8,7 +8,6 @@ import DocView from "./components/DocView";
 import Landing from "./components/Landing";
 import Pentest from "./components/Pentest";
 import Agent from "./components/Agent";
-import Router from "./components/Router";
 import VulnSearch from "./components/VulnSearch";
 import Defense from "./components/Defense";
 
@@ -169,12 +168,6 @@ export default function App() {
       {section === "agent" && (
         <main className="pt-[64px]">
           <Agent t={t} />
-        </main>
-      )}
-
-      {section === "router" && (
-        <main className="pt-[64px]">
-          <Router t={t} />
         </main>
       )}
 

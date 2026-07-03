@@ -14,6 +14,8 @@ __pycache__/
 *.jsonl
 runs_store/
 campaigns_store/
+notebook_store/
+archetype_store.json
 
 # Tooling state
 .serena/

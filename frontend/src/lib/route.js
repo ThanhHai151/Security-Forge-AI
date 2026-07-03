@@ -1,7 +1,7 @@
 /**
  * Tiny hash router for the SPA (agent build). Sections: Docs (knowledge base), Pentest tool
- * catalog, AI (agent console), and Providers (the AI connection pool; route stays `#/router`)
- * — plus deep links into a single doc (`#/docs/<slug>`). Docs is the home/default.
+ * catalog, and Agent (the Expert Supervisor console) — plus deep links into a single doc
+ * (`#/docs/<slug>`). Docs is the home/default.
  *
  * Hash shapes:
  *   #/                 → docs (home)
@@ -10,9 +10,9 @@
  *   #/pentest          → pentest tool catalog
  *   #/vuln             → vuln search (catalog + CVE lookup)
  *   #/defense          → defense (codebase review)
- *   #/agent            → Agent console (single Hermes run + continuous campaign, merged)
- *   #/ai, #/auto       → back-compat: both fold into /agent (its own toggle picks the mode)
- *   #/router           → Providers (AI connection pool)
+ *   #/agent            → Agent console (Expert Supervisor; Continuous is locked)
+ *   #/ai, #/auto       → back-compat: both fold into /agent
+ *   #/router           → back-compat: the old Providers page was removed; falls through to docs
  *   #/<slug>           → back-compat: opens that doc under /docs
  */
 import { bySlug } from "../content/catalog";
@@ -33,7 +33,6 @@ export function parseRoute(hash) {
   if (head === "vuln") return { section: "vuln", slug: "" };
   if (head === "defense") return { section: "defense", slug: "" };
   if (head === "agent" || head === "ai" || head === "auto") return { section: "agent", slug: "" };
-  if (head === "router") return { section: "router", slug: "" };
 
   // Back-compat: a bare known slug (`#/sql_injection`) opens that doc.
   if (bySlug[head]) return { section: "docs", slug: head };

@@ -21,6 +21,7 @@ and behaviour can change without notice.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from collections.abc import Callable
@@ -105,12 +106,30 @@ class KiroBackend:
         self._post = http_post or _urllib_post_raw
         self._extra = extra_headers or {}
         self._pd = provider_data or {}
+        # Normalise base_url: strip any trailing slash/path and append the
+        # canonical endpoint path so custom/enterprise base URLs work.
+        self._base_url = base_url.rstrip("/") if base_url else ""
 
     # -- request construction -------------------------------------------------
 
     def _endpoints(self) -> tuple[str, ...]:
+        """Return the ordered list of CodeWhisperer endpoints to try.
+
+        When a custom ``base_url`` is provided (e.g. an enterprise Kiro host or
+        a specific regional fallback), prepend it to the default list so it is
+        tried first without losing the built-in fallbacks.
+        """
         auth = self._pd.get("authMethod", "")
-        return _AMAZON_FIRST if auth in ("api_key", "external_idp") else _DEFAULT_ENDPOINTS
+        defaults = _AMAZON_FIRST if auth in ("api_key", "external_idp") else _DEFAULT_ENDPOINTS
+        if not self._base_url:
+            return defaults
+        # Normalise: if caller passed just the host, append the API path.
+        custom = self._base_url
+        if not custom.endswith("/generateAssistantResponse"):
+            custom = f"{custom}/generateAssistantResponse"
+        if custom in defaults:
+            return defaults  # already in the list — keep original order
+        return (custom, *defaults)
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -215,7 +234,13 @@ class KiroBackend:
         payload: dict[str, Any] = {
             "conversationState": {
                 "chatTriggerType": "MANUAL",
-                "conversationId": str(uuid.uuid4()),
+                # Derive a stable conversation ID from the run's goal+target so all
+                # steps of the same run share one server-side conversation context.
+                # (9router maintains conversationId per session; a fresh UUID every
+                # call breaks server-side history tracking and double-counts quota.)
+                "conversationId": hashlib.sha256(
+                    f"{config.goal}:{config.target}".encode()
+                ).hexdigest()[:32],
                 "currentMessage": {"userInputMessage": current},
                 "history": history,
             }

@@ -24,12 +24,15 @@ from ai_framework.router.accounts import TIERS, Account, AccountStore
 from ai_framework.router.oauth import OAuthError, OAuthManager
 from ai_framework.router.usage import UsageStore
 
-# Refresh an OAuth token this many seconds before it actually expires (clock skew + request time).
-_REFRESH_LEAD = 120.0
+# Refresh an OAuth token this many seconds before it actually expires.
+# 10 minutes: Kiro/AWS SSO tokens are often revoked upstream before the stated
+# expiry, so a generous lead prevents the "valid locally, 400 upstream" failure.
+_REFRESH_LEAD = 600.0
 
 # Cooldown seconds per failure class. Auth/forbidden (likely a banned or wrong key) parks the
-# account far longer than a transient rate-limit.
-_COOLDOWN = {429: 60, 401: 600, 403: 600}
+# account far longer than a transient rate-limit. 400 gets a short cooldown because it often
+# means a stale OAuth token that will be refreshed on the next attempt.
+_COOLDOWN = {429: 60, 400: 15, 401: 600, 403: 600}
 _DEFAULT_COOLDOWN = 20
 
 # Process-wide health table, keyed by account id. Shared across runs and read by the API.
@@ -207,6 +210,29 @@ class RouterBackend:
                 )
                 return result
             except HttpError as exc:
+                # OAuth accounts: 400/401 often means the access token was revoked
+                # upstream before its stated expiry. Force an immediate refresh and
+                # retry once before cooling the account down.
+                if exc.status in (400, 401) and acct.oauth_provider and acct.refresh_token:
+                    try:
+                        tokens = self._oauth.refresh(
+                            acct.oauth_provider, acct.refresh_token, acct.provider_data
+                        )
+                        self._store.update(acct.id, tokens)
+                        new_key = tokens.get("api_key", acct.api_key)
+                        retry_backend = self._backend_for(acct, new_key)
+                        result = invoke(retry_backend)
+                        _record(acct.id, ok=True, status=200)
+                        retry_usage = getattr(retry_backend, "last_usage", None) or {}
+                        self._usage.record(
+                            acct.id, ok=True,
+                            prompt_tokens=retry_usage.get("prompt_tokens", 0),
+                            completion_tokens=retry_usage.get("completion_tokens", 0),
+                            total_tokens=retry_usage.get("total_tokens", 0),
+                        )
+                        return result
+                    except Exception:  # noqa: BLE001 - refresh failure → fall through to cooldown
+                        pass
                 _record(
                     acct.id, ok=False, status=exc.status, error=str(exc),
                     cooldown=_cooldown_for(exc.status),

@@ -783,26 +783,3 @@ changed, or which are secondary/uncertain, are flagged inline (§0–§8) and in
 - Red Canary C2-framework trends — https://redcanary.com/threat-detection-report/trends/c2-frameworks/ ·
   Mandiant M-Trends 2025 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2025/ · M-Trends 2026 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026
 
-> **Verification note.** §2–§6 network/host claims are backed by direct multi-source fetches
-> (MITRE, Microsoft Learn, vendor detection-engineering blogs); §0–§1 authorization/OPSEC and §9
-> emulation are anchored to NIST SP 800-115, PTES, and the MITRE CTID library. The identity/cloud
-> material (§7) and the JA4/JA4+ additions (§4) come from a 2026 multi-source, adversarially
-> verified research pass (primary sources: MITRE, Microsoft Learn, Cloudflare/FoxIO, Elastic
-> Security Labs, Unit 42, adsecurity.org). Flagged uncertainties:
-> (a) the **ATT&CK v19 tactic split** is confirmed against primary MITRE sources (v19.0 released
-> 2026-04-28, v19.1 current; Enterprise-only), **but the per-technique reassignment** to Stealth
-> vs. Defense Impairment is not uniform — look up each technique's tactic on attack.mitre.org
-> rather than assuming;
-> (b) domain-fronting viability and impossible-travel VPN/cloud exclusions change over time —
-> re-verify per provider; RC4-Kerberos anomaly hunting is *strengthening* (Server 2025 / 2026 RC4
-> phase-out) but false-positives on legacy networks;
-> (c) **§8 (endpoint depth & delivery) rests on fewer independent corroborations than §7** and is
-> framed as pointers to primary sources; AMSI/ETW provider-internal event IDs (1101/1201),
-> immutable-SIEM specifics, BYOVD's exact sub-technique mapping, and the "80% of samples use T1055"
-> figure remain secondary/single-sourced;
-> (d) three researched claims were **tested and rejected — do not reintroduce them:** that JA4
-> defeats evasion by sorting *ciphers* (the load-bearing mechanism is *extension* sorting), the
-> folk heuristic "a TGS with no preceding TGT = Golden Ticket," and a mis-reading of the ATT&CK
-> versions page; (e) a few sources returned SSL/403 errors during earlier research (0xc0decafe
-> PE-timestamps, Cobalt Strike JARM, the T1562 parent page) and were corroborated via search-index
-> excerpts against primary material.

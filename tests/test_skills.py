@@ -64,6 +64,16 @@ def test_load_and_vi_fallback(tmp_path):
     assert reg.load("nope") is None
 
 
+def test_skill_exposes_taxonomy_fields_from_bundled_manifest():
+    """domain/subdomain/owasp are already in every skill's frontmatter (test_mapping_skills.py
+    requires them there) — this checks the loader actually surfaces them on the Skill model."""
+    skill = SkillRegistry().get("exploiting-sql-injection")
+    assert skill is not None
+    assert skill.domain == "web-application-security"
+    assert skill.subdomain == "injection"
+    assert "A03:2021-Injection" in skill.owasp
+
+
 def test_bundled_opsec_skills_present():
     """The OPSEC skills ship with the package and are discoverable."""
     names = {s.name for s in SkillRegistry().skills()}

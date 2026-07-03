@@ -29,6 +29,16 @@ def _isolate_usage_store(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SECFORGE_USAGE", str(tmp_path / "ai_usage.json"))
 
 
+@pytest.fixture(autouse=True)
+def _enable_legacy_autonomous_engine(monkeypatch) -> None:
+    """``RunService.start_run``/``start_campaign`` (the old autonomous engine) are gated off
+    by default now that the Expert Supervisor is the primary flow (see backend/service.py:
+    ``AutonomousDisabledError``). Existing tests exercise that engine directly, so keep it
+    enabled for the whole suite; ``test_autonomous_gate.py`` overrides this to verify the
+    off-by-default behavior itself."""
+    monkeypatch.setenv("SECFORGE_ENABLE_AUTONOMOUS", "1")
+
+
 @pytest.fixture
 def mock_server() -> Iterator[str]:
     server = HTTPServer(("127.0.0.1", 0), _Handler)

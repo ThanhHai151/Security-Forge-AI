@@ -76,6 +76,12 @@ class Skill(BaseModel):
     when_to_use: str = ""
     tags: list[str] = Field(default_factory=list)
     languages: list[str] = Field(default_factory=lambda: ["en"])
+    # Taxonomy-addressing fields (frontmatter already carries these on every bundled skill;
+    # exposing them is what lets the Expert Supervisor resolve a taxonomy node -> concrete
+    # skill(s) instead of relying on the model to self-select from the trigger line alone).
+    domain: str = ""
+    subdomain: str = ""
+    owasp: list[str] = Field(default_factory=list)
     dir: str = ""  # directory name (== name by convention)
 
     def trigger(self) -> str:
@@ -113,6 +119,7 @@ class SkillRegistry:
             name = str(front.get("name") or path.parent.name)
             tags = front.get("tags") or []
             langs = front.get("languages") or ["en"]
+            owasp = front.get("owasp") or []
             out.append(
                 Skill(
                     name=name,
@@ -120,6 +127,9 @@ class SkillRegistry:
                     when_to_use=_section(body, "When to Use"),
                     tags=[str(t) for t in tags] if isinstance(tags, list) else [],
                     languages=[str(x) for x in langs] if isinstance(langs, list) else ["en"],
+                    domain=str(front.get("domain") or ""),
+                    subdomain=str(front.get("subdomain") or ""),
+                    owasp=[str(o) for o in owasp] if isinstance(owasp, list) else [],
                     dir=path.parent.name,
                 )
             )

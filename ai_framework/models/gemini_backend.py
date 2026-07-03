@@ -99,6 +99,11 @@ class GeminiBackend:
             if parts:
                 contents.append({"role": "model", "parts": parts})
             if turn.tool_results:
+                # Guard: Gemini requires a model turn immediately before functionResponse.
+                # If no model content was emitted above (empty reasoning + no tool calls),
+                # insert a placeholder so the conversation stays valid.
+                if not parts:
+                    contents.append({"role": "model", "parts": [{"text": "..."}]})
                 contents.append(
                     {
                         "role": "user",

@@ -9,6 +9,7 @@ testable. ``defense/`` can reuse this unchanged — only the goal/objective diff
 
 from __future__ import annotations
 
+import os
 import threading
 from typing import TYPE_CHECKING
 
@@ -36,11 +37,19 @@ from ai_framework.agent.system import campaign_context_block
 from ai_framework.agent.verify import FindingVerifier
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
+from ai_framework.notebook.contracts import NodeStatus
+from ai_framework.notebook.raw_log import RawLogStore
+from ai_framework.notebook.store import NotebookStore
+from ai_framework.notes.contracts import Finding, Severity
 from ai_framework.notes.remediation import Remediator
 from ai_framework.notes.report import render_json, render_markdown
 from ai_framework.notes.store import JsonlFindingStore
+from ai_framework.research.archetype import ArchetypeStore
 from ai_framework.router.accounts import AccountStore
 from ai_framework.router.usage import UsageStore
+from ai_framework.supervisor.contracts import SessionContext
+from ai_framework.supervisor.service import SupervisorService
+from ai_framework.taxonomy.tree import Taxonomy
 from ai_framework.tools.base import ToolContext, ToolRegistry
 
 if TYPE_CHECKING:
@@ -57,6 +66,23 @@ from ai_framework.tools.security import (
     RobotsSitemapTool,
 )
 from ai_framework.tools.skills_tool import LoadSkillTool
+
+_AUTONOMOUS_ENV = "SECFORGE_ENABLE_AUTONOMOUS"
+
+
+class AutonomousDisabledError(RuntimeError):
+    """Raised when a caller hits the legacy autonomous engine without opting in.
+
+    SecForge no longer executes pentest actions itself by default — that job moved to an
+    external coding agent (e.g. Claude Code) guided by the Expert Supervisor
+    (``ai_framework.supervisor``). The old engine (``ai_framework.agent``/this class's
+    run/campaign methods) is kept for a future "Continuous" redesign, not deleted, but it
+    is gated off so a stale frontend build can't silently fall back to autonomous execution.
+    """
+
+
+def _autonomous_enabled() -> bool:
+    return os.getenv(_AUTONOMOUS_ENV, "").strip().lower() in {"1", "true", "yes"}
 
 
 def default_registry() -> ToolRegistry:
@@ -109,6 +135,9 @@ class RunService:
         runs_dir: str | None = "runs_store",
         campaigns_dir: str | None = "campaigns_store",
         assets_path: str | None = "assets_store.jsonl",
+        notebook_dir: str | None = "notebook_store",
+        archetype_path: str | None = "archetype_store.json",
+        raw_log_path: str | None = "raw_output_store.jsonl",
     ) -> None:
         self._registry = registry or default_registry()
         self._memory_path = memory_path
@@ -123,6 +152,12 @@ class RunService:
         self._campaign_store = CampaignStore(campaigns_dir) if campaigns_dir else None
         self._lock = threading.Lock()
         self._pillars: PlatformServices | None = None
+        self._notebook_dir = notebook_dir or "notebook_store"
+        self._archetype_path = archetype_path or "archetype_store.json"
+        self._raw_log_path = raw_log_path or "raw_output_store.jsonl"
+        self._raw_log_store: RawLogStore | None = None
+        self._taxonomy = Taxonomy()
+        self._supervisor: SupervisorService | None = None
         # Stop-button plumbing: one cancel event per in-flight run/campaign, set()-able from a
         # request handler and polled by run_loop between turns. In-memory only — a run started
         # before a process restart can no longer be cancelled, same as it can no longer be polled.
@@ -150,6 +185,121 @@ class RunService:
 
             self._pillars = PlatformServices()
         return self._pillars
+
+    @property
+    def supervisor(self) -> SupervisorService:
+        """The Expert Supervisor — built once on first use. Never touches ``ToolRegistry``,
+        ``Backend``, or ``accounts``; see ``ai_framework.supervisor`` for why."""
+        if self._supervisor is None:
+            self._supervisor = SupervisorService(
+                taxonomy=self._taxonomy,
+                notebooks=NotebookStore(self._notebook_dir, taxonomy=self._taxonomy),
+                archetypes=ArchetypeStore(self._archetype_path),
+            )
+        return self._supervisor
+
+    # ── Expert Supervisor + Hermes notebook (the new advisory flow) ──────────────────
+
+    def advise(
+        self, domain: str, question: str, mode: str = "blackbox", project_path: str | None = None
+    ) -> dict:
+        ctx = SessionContext(domain=domain, question=question, mode=mode, project_path=project_path)
+        return self.supervisor.advise(ctx).model_dump(mode="json")
+
+    def get_taxonomy_tree(self) -> list[dict]:
+        return self.supervisor.taxonomy.tree()
+
+    def list_archetypes(self) -> list[dict]:
+        return [h.model_dump() for h in self.supervisor.archetypes.list_all()]
+
+    def list_notebook_domains(self) -> list[dict]:
+        return self.supervisor.notebooks.list_domains()
+
+    def get_notebook(self, domain: str) -> dict:
+        return self.supervisor.notebooks.get_or_create(domain).model_dump(mode="json")
+
+    def get_notebook_tree(self, domain: str) -> dict:
+        return {"domain": domain, "tree": self.supervisor.notebooks.tree_view(domain)}
+
+    def update_notebook_node(
+        self,
+        domain: str,
+        node_id: str,
+        status: str,
+        note: str = "",
+        finding: dict | None = None,
+    ) -> dict:
+        """Set one node's status. A human-set ``confirmed`` also writes a linked ``Finding``
+        (auto-ingest never reaches this path with ``confirmed`` — see
+        ``NotebookStore.ingest_promote``). This always clears ``in_progress`` on the node —
+        see ``NotebookStore.set_status``."""
+        node_status = NodeStatus(status)
+        notebook = self.supervisor.notebooks.set_status(
+            domain, node_id, node_status, note=note, updated_by="user"
+        )
+        store = self._findings()
+        if node_status == NodeStatus.confirmed and finding and store is not None:
+            record = Finding(
+                target=domain,
+                title=str(finding.get("title") or node_id),
+                detail=str(finding.get("detail", "")),
+                severity=Severity.parse(finding.get("severity", "medium")),
+                evidence=str(finding.get("evidence", "")),
+                tags=[node_id],
+            )
+            store.write(record)
+            notebook = self.supervisor.notebooks.link_finding(domain, node_id, record.id)
+        return notebook.model_dump(mode="json")
+
+    def set_notebook_archetype(self, domain: str, archetype: str) -> dict:
+        return self.supervisor.notebooks.set_archetype(domain, archetype).model_dump(mode="json")
+
+    def mark_notebook_in_progress(self, domain: str, node_id: str) -> dict:
+        """Manually flag ``node_id`` as the one thing currently being tested on this target
+        (normally set automatically by ``advise()`` — see ``NotebookStore.set_in_progress``)."""
+        return self.supervisor.notebooks.set_in_progress(domain, node_id).model_dump(mode="json")
+
+    def list_notebook_tree_roots(self) -> list[dict]:
+        """Root domains with their nested subdomains, for the sidebar."""
+        return self.supervisor.notebooks.roots_and_children()
+
+    def add_notebook_child(self, parent_domain: str, child: str) -> dict:
+        """Attach a discovered subdomain under its parent."""
+        notebook = self.supervisor.notebooks.add_child(parent_domain, child)
+        return notebook.model_dump(mode="json")
+
+    def delete_notebook_domain(self, domain: str) -> bool:
+        """Permanently remove a domain's notebook. Returns False if it wasn't tracked."""
+        return self.supervisor.notebooks.delete(domain)
+
+    def add_notebook_chain(self, domain: str, from_node: str, to_node: str, note: str = "") -> dict:
+        return self.supervisor.notebooks.add_chain(domain, from_node, to_node, note).model_dump(
+            mode="json"
+        )
+
+    def ingest_notebook_output(self, domain: str, text: str) -> dict:
+        """Fold an external coding agent's pasted raw output into the notebook.
+
+        Persists ``text`` verbatim (``RawLogStore``) before any parsing, and only ever
+        promotes to ``unconfirmed`` or files a marker-justified custom node — see
+        ``ai_framework.supervisor.ingest`` for the full contract.
+        """
+        from ai_framework.supervisor.ingest import ingest_output
+
+        result = ingest_output(
+            domain, text, self.supervisor.notebooks, self.supervisor.taxonomy, self._raw_log()
+        )
+        notebook = self.supervisor.notebooks.get_or_create(domain)
+        return {
+            "notebook": notebook.model_dump(mode="json"),
+            "promoted": result.promoted,
+            "custom_added": result.custom_added,
+        }
+
+    def _raw_log(self) -> RawLogStore:
+        if self._raw_log_store is None:
+            self._raw_log_store = RawLogStore(self._raw_log_path)
+        return self._raw_log_store
 
     def _backend_for(self, config: RunConfig) -> Backend:
         """Resolve the backend: the native rotating router, or a simple named backend."""
@@ -192,6 +342,12 @@ class RunService:
                 self._cancel_events.pop(run.id, None)
 
     def start_run(self, config: RunConfig) -> str:
+        if not _autonomous_enabled():
+            raise AutonomousDisabledError(
+                "Autonomous execution is disabled by default — SecForge no longer runs "
+                f"pentest actions itself. Set {_AUTONOMOUS_ENV}=1 to re-enable the legacy "
+                "engine, or use POST /supervisor/advise instead."
+            )
         run = Run(config=config)
         cancel = threading.Event()
         with self._lock:
@@ -396,6 +552,12 @@ class RunService:
                 return
 
     def start_campaign(self, config: CampaignConfig) -> str:
+        if not _autonomous_enabled():
+            raise AutonomousDisabledError(
+                "Autonomous execution is disabled by default — Continuous campaigns are "
+                f"locked pending a redesign. Set {_AUTONOMOUS_ENV}=1 to re-enable the legacy "
+                "engine, or use POST /supervisor/advise instead."
+            )
         campaign = Campaign(config=config)
         # Seed the map with the one lead we always start from: reconnaissance.
         campaign.coverage = [
@@ -506,6 +668,8 @@ class RunService:
         return self._campaign_store.list_campaigns() if self._campaign_store else []
 
     # ── Defense: static assessment, with an optional live attack of the running app ──────
+    # Standalone — deliberately does not feed the Hermes notebook (see ai_framework.notebook);
+    # that notebook is red-team-only, scoped to live URL targets.
 
     def defense_autopilot(
         self,

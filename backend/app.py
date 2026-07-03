@@ -49,6 +49,44 @@ API routes (with or without the ``/api`` prefix):
     POST   /oauth/complete     -> 201 {status:done, account} | 400      body: {session_id, code}
     POST   /router/policy      -> 200 {policy} | 400       body: {policy}
     GET    /memory?target=...  -> 200 {total, by_kind, targets, recent}
+
+    -- Expert Supervisor + Hermes notebook (the default advisory flow; never calls an AI
+       provider or executes anything against a target) --
+    POST  /supervisor/advise   body: {domain, question, mode?, project_path?}
+                                      -> 200 {domain, archetype, plan, skills, context_block}
+    GET   /taxonomy            -> 200 {tree}                       (shared category->technique tree)
+    GET   /archetypes          -> 200 {archetypes}                 (seeded + user-saved heuristics)
+    GET   /notebooks           -> 200 {notebooks}                  (flat domain summaries)
+    GET   /notebooks/tree      -> 200 {roots}                      (nested root -> subdomain tree)
+    GET   /notebook/{domain}          -> 200 <Notebook JSON>       (created on first /advise call)
+    GET   /notebook/{domain}/tree     -> 200 {domain, tree}        (taxonomy + per-node status,
+                                                                     incl. a synthetic "others"
+                                                                     category for custom findings)
+    PATCH /notebook/{domain}          body: {node_id, status, note?, finding?} -> 200 <Notebook>
+                                       body: {node_id, in_progress: true}      -> 200 <Notebook>
+                                                                     (manual "testing this now"
+                                                                      flag — set automatically
+                                                                      by /advise too)
+    PATCH /notebook/{domain}/archetype body: {archetype}           -> 200 <Notebook>
+    POST  /notebook/{domain}/ingest   body: {text}                 -> {notebook, promoted,
+                                                                        custom_added}
+                                                                     (paste an external agent's raw
+                                                                      output; stored verbatim, then
+                                                                      parsed for CONFIRMED/
+                                                                      NEW_FINDING_TYPE markers)
+    POST  /notebook/{domain}/children body: {child}                -> 201 <Notebook> (attach a
+                                                                     discovered subdomain under
+                                                                     its parent)
+    POST  /notebook/{domain}/chains   body: {from_node, to_node, note?} -> 201 <Notebook>
+                                                                     (record an exploit-chain step)
+    DELETE /notebook/{domain}         -> 200 {ok: true} | 404        (permanently removes that
+                                                                     domain's notebook; does not
+                                                                     cascade to its subdomains)
+
+    NOTE: /runs, /campaigns, and /pentest below execute the *legacy autonomous engine* and are
+    disabled (403) unless SECFORGE_ENABLE_AUTONOMOUS=1 — SecForge no longer executes pentest
+    actions itself by default; use /supervisor/advise and hand the result to your own coding
+    agent (e.g. Claude Code) instead. Continuous campaigns stay locked pending a redesign.
     GET    /kb?locale=         -> 200 {total, categories}        (knowledge base list)
     GET    /kb/doc/{id}?locale= -> 200 {id, title, html, toc} | 404
     GET    /kb/search?q=&mode=&locale= -> 200 {hits}             (mode=full|errors)
@@ -80,7 +118,7 @@ from ai_framework.router.oauth import PROVIDERS as OAUTH_PROVIDERS
 from ai_framework.router.oauth import OAuthError, OAuthManager
 from ai_framework.router.router import health_snapshot
 from backend.providers import PROVIDER_TYPES, check_endpoint, probe_models
-from backend.service import RunService
+from backend.service import AutonomousDisabledError, RunService
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 61021  # dev (API-only). The packaged launcher binds 61022 with static_root.
@@ -226,12 +264,27 @@ def make_handler(
         # ── POST ──
         def _post_impl(self) -> None:
             path = _strip_api_prefix(urlparse(self.path).path)
+            if path == "/supervisor/advise":
+                b = self._body()
+                try:
+                    result = service.advise(
+                        domain=b.get("domain", ""),
+                        question=b.get("question", ""),
+                        mode=b.get("mode", "blackbox"),
+                        project_path=b.get("project_path"),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    return self._send(400, {"error": str(exc)})
+                return self._send(200, result)
             if path == "/runs":
                 try:
                     config = RunConfig.model_validate(self._body())
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
-                return self._send(201, {"id": service.start_run(config)})
+                try:
+                    return self._send(201, {"id": service.start_run(config)})
+                except AutonomousDisabledError as exc:
+                    return self._send(403, {"error": str(exc)})
             if path.startswith("/runs/") and path.endswith("/stop"):
                 rid = path[len("/runs/") : -len("/stop")]
                 ok = service.stop_run(rid)
@@ -241,7 +294,10 @@ def make_handler(
                     cfg = CampaignConfig.model_validate(self._body())
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
-                return self._send(201, {"id": service.start_campaign(cfg)})
+                try:
+                    return self._send(201, {"id": service.start_campaign(cfg)})
+                except AutonomousDisabledError as exc:
+                    return self._send(403, {"error": str(exc)})
             if path == "/pentest":
                 # One-shot autonomous pentest: caller supplies only an address. Accept it under
                 # either "target" or "domain"; autopilot is forced on so a single request drives
@@ -252,7 +308,10 @@ def make_handler(
                     cfg = CampaignConfig.model_validate(body)
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
-                return self._send(201, {"id": service.start_pentest(cfg)})
+                try:
+                    return self._send(201, {"id": service.start_pentest(cfg)})
+                except AutonomousDisabledError as exc:
+                    return self._send(403, {"error": str(exc)})
             if path.startswith("/campaigns/"):
                 rest = path[len("/campaigns/") :]
                 body = self._body()
@@ -389,6 +448,27 @@ def make_handler(
                     authorized_targets=set(body.get("authorized_targets", []) or []),
                 )
                 return self._send(400 if "error" in report else 200, report)
+            if path.startswith("/notebook/") and path.endswith("/ingest"):
+                domain = unquote(path[len("/notebook/") : -len("/ingest")].rstrip("/"))
+                text = self._body().get("text", "")
+                return self._send(200, service.ingest_notebook_output(domain, text))
+            if path.startswith("/notebook/") and path.endswith("/children"):
+                domain = unquote(path[len("/notebook/") : -len("/children")].rstrip("/"))
+                b = self._body()
+                child = b.get("child", "")
+                if not child:
+                    return self._send(400, {"error": "missing 'child'"})
+                return self._send(201, service.add_notebook_child(domain, child))
+            if path.startswith("/notebook/") and path.endswith("/chains"):
+                domain = unquote(path[len("/notebook/") : -len("/chains")].rstrip("/"))
+                b = self._body()
+                from_node, to_node = b.get("from_node", ""), b.get("to_node", "")
+                if not from_node or not to_node:
+                    return self._send(400, {"error": "missing 'from_node'/'to_node'"})
+                return self._send(
+                    201,
+                    service.add_notebook_chain(domain, from_node, to_node, note=b.get("note", "")),
+                )
             return self._send(404, {"error": "not found"})
 
         # ── PATCH ──
@@ -399,6 +479,28 @@ def make_handler(
                 if not acct:
                     return self._send(404, {"error": "unknown account"})
                 return self._send(200, acct.masked())
+            if path.startswith("/notebook/") and path.endswith("/archetype"):
+                domain = unquote(path[len("/notebook/") : -len("/archetype")].rstrip("/"))
+                archetype = self._body().get("archetype", "")
+                return self._send(200, service.set_notebook_archetype(domain, archetype))
+            if path.startswith("/notebook/"):
+                domain = unquote(path.removeprefix("/notebook/"))
+                b = self._body()
+                if b.get("in_progress") is True and "status" not in b:
+                    return self._send(
+                        200, service.mark_notebook_in_progress(domain, b.get("node_id", ""))
+                    )
+                try:
+                    result = service.update_notebook_node(
+                        domain,
+                        b.get("node_id", ""),
+                        b.get("status", "untested"),
+                        note=b.get("note", ""),
+                        finding=b.get("finding"),
+                    )
+                except ValueError as exc:
+                    return self._send(400, {"error": str(exc)})
+                return self._send(200, result)
             return self._send(404, {"error": "not found"})
 
         # ── DELETE ──
@@ -408,6 +510,12 @@ def make_handler(
                 ok = service.accounts.remove(path.removeprefix("/accounts/"))
                 if not ok:
                     return self._send(404, {"error": "unknown account"})
+                return self._send(200, {"ok": True})
+            if path.startswith("/notebook/"):
+                domain = unquote(path.removeprefix("/notebook/"))
+                ok = service.delete_notebook_domain(domain)
+                if not ok:
+                    return self._send(404, {"error": "unknown domain"})
                 return self._send(200, {"ok": True})
             return self._send(404, {"error": "not found"})
 
@@ -442,6 +550,20 @@ def make_handler(
             if path == "/memory":
                 target = (parse_qs(parsed.query).get("target") or [""])[0]
                 return self._send(200, service.memory_summary(target))
+            if path == "/taxonomy":
+                return self._send(200, {"tree": service.get_taxonomy_tree()})
+            if path == "/archetypes":
+                return self._send(200, {"archetypes": service.list_archetypes()})
+            if path == "/notebooks":
+                return self._send(200, {"notebooks": service.list_notebook_domains()})
+            if path == "/notebooks/tree":
+                return self._send(200, {"roots": service.list_notebook_tree_roots()})
+            if path.startswith("/notebook/") and path.endswith("/tree"):
+                domain = unquote(path[len("/notebook/") : -len("/tree")].rstrip("/"))
+                return self._send(200, service.get_notebook_tree(domain))
+            if path.startswith("/notebook/"):
+                domain = unquote(path.removeprefix("/notebook/"))
+                return self._send(200, service.get_notebook(domain))
             # ── pillars (knowledge base / vuln search / i18n) ──
             query = parse_qs(parsed.query)
             locale = (query.get("locale") or ["en"])[0]

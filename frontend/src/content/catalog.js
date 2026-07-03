@@ -142,6 +142,11 @@ for (const { file, slug, category } of DOC_SOURCES) {
   const raw = docByFile[file];
   if (!raw) continue;
   const parsed = parseCard(raw);
+  const viFile = file.replace(/\.md$/, ".vi.md");
+  const viRaw = docByFile[viFile];
+  const viParsed = viRaw ? parseCard(viRaw) : null;
+  const locales = { en: parsed };
+  if (viParsed) locales.vi = viParsed;
   const item = {
     slug,
     title: parsed.title || file,
@@ -149,8 +154,8 @@ for (const { file, slug, category } of DOC_SOURCES) {
     status: parsed.status || "complete",
     owasp: parsed.owasp || "",
     summary: parsed.summary || "",
-    hasVi: false,
-    locales: { en: parsed },
+    hasVi: Boolean(viParsed),
+    locales,
   };
   if (!docCategoryMap.has(category)) docCategoryMap.set(category, []);
   docCategoryMap.get(category).push(item);

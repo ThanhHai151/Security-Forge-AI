@@ -770,23 +770,3 @@ chứng bên dưới.
 - Xu hướng C2-framework của Red Canary — https://redcanary.com/threat-detection-report/trends/c2-frameworks/ ·
   Mandiant M-Trends 2025 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2025/ · M-Trends 2026 — https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026
 
-> **Ghi chú kiểm chứng.** Các tuyên bố về mạng/máy chủ ở §2–§6 được hậu thuẫn bằng các lần tải trực tiếp
-> nhiều nguồn (MITRE, Microsoft Learn, các blog kỹ thuật phát hiện của nhà cung cấp); ủy quyền/OPSEC ở §0–§1
-> và mô phỏng ở §9 được neo vào NIST SP 800-115, PTES, và thư viện MITRE CTID. Phần danh tính/cloud (§7) và các
-> bổ sung JA4/JA4+ (§4) đến từ một đợt nghiên cứu đa-nguồn, được kiểm chứng đối kháng vào 2026 (nguồn gốc:
-> MITRE, Microsoft Learn, Cloudflare/FoxIO, Elastic Security Labs, Unit 42, adsecurity.org). Các điểm không
-> chắc chắn được đánh dấu:
-> (a) **cú tách tactic ATT&CK v19** đã được xác nhận đối chiếu nguồn MITRE gốc (v19.0 phát hành 2026-04-28,
-> v19.1 hiện hành; chỉ Enterprise), **nhưng việc ánh xạ lại từng kỹ thuật** vào Stealth hay Defense Impairment
-> là không đồng nhất — hãy tra tactic của từng kỹ thuật tại attack.mitre.org thay vì suy đoán;
-> (b) tính khả thi của domain-fronting và các loại trừ VPN/cloud của impossible-travel thay đổi theo thời gian
-> — hãy kiểm chứng lại theo từng nhà cung cấp; việc săn bất thường RC4-Kerberos đang *mạnh lên* (Server 2025 /
-> loại bỏ RC4 đến 2026) nhưng dương-tính-giả trên các mạng cũ;
-> (c) **§8 (chiều sâu endpoint & phát tán) dựa trên ít chứng thực độc lập hơn §7** và được trình bày như các
-> chỉ dẫn tới nguồn gốc; các event ID nội-bộ-provider của AMSI/ETW (1101/1201), chi tiết SIEM-bất-biến, ánh xạ
-> sub-technique chính xác của BYOVD, và con số "80% mẫu dùng T1055" vẫn là nguồn thứ cấp/đơn-nguồn;
-> (d) ba tuyên bố nghiên cứu đã bị **kiểm nghiệm và bác bỏ — đừng đưa lại vào:** rằng JA4 đánh bại né tránh
-> bằng cách sắp xếp *cipher* (cơ chế cốt lõi là sắp xếp *extension*), quy tắc dân gian "một TGS không có TGT
-> đứng trước = Golden Ticket," và một cách đọc sai trang phiên bản ATT&CK; (e) một vài nguồn trả về lỗi SSL/403
-> trong nghiên cứu trước đó (0xc0decafe PE-timestamps, Cobalt Strike JARM, trang cha T1562) và đã được chứng
-> thực qua các trích đoạn chỉ mục tìm kiếm đối chiếu với tài liệu gốc.

@@ -89,6 +89,52 @@ export const oauthComplete = (session_id, code, label = "") =>
 export const getMemory = (target = "") =>
   get(`/memory${target ? `?target=${encodeURIComponent(target)}` : ""}`);
 
+// ── Expert Supervisor + Hermes notebook (the default advisory flow) ──
+// Never calls an AI provider and never touches the target itself — it hands a ranked
+// strategy + skill(s) to whichever coding agent (e.g. Claude Code) the operator drives.
+// -> { domain, archetype, plan: [{order, action, reasoning, taxonomy_ref}], skills, context_block }
+export const advise = ({ domain, question, mode = "blackbox", projectPath } = {}) =>
+  send("POST", "/supervisor/advise", {
+    domain,
+    question,
+    mode,
+    project_path: projectPath || undefined,
+  });
+// Shared category -> technique tree (the same vocabulary the notebook and skills use).
+export const getTaxonomy = () => get("/taxonomy"); // -> { tree: [{id, label, children}] }
+export const getArchetypes = () => get("/archetypes"); // -> { archetypes: [...] }
+export const listNotebooks = () => get("/notebooks"); // -> { notebooks: [{domain, parent_domain, archetype, confirmed, total, updated_at}] }
+// Nested root domain -> discovered-subdomain tree, for the sidebar.
+export const getNotebookTreeRoots = () => get("/notebooks/tree"); // -> { roots: [{domain, confirmed, total, children: [...]}] }
+export const getNotebook = (domain) => get(`/notebook/${encodeURIComponent(domain)}`);
+// Taxonomy tree merged with this domain's per-node confirmed/unconfirmed/untested status
+// (plus in_progress/justification, and a synthetic "others" category for custom findings).
+export const getNotebookTree = (domain) => get(`/notebook/${encodeURIComponent(domain)}/tree`);
+export const updateNotebookNode = (domain, nodeId, status, extra = {}) =>
+  send("PATCH", `/notebook/${encodeURIComponent(domain)}`, { node_id: nodeId, status, ...extra });
+// Manually flag a node as "being tested right now" (normally set automatically by advise()).
+export const markNotebookInProgress = (domain, nodeId) =>
+  send("PATCH", `/notebook/${encodeURIComponent(domain)}`, { node_id: nodeId, in_progress: true });
+export const setNotebookArchetype = (domain, archetype) =>
+  send("PATCH", `/notebook/${encodeURIComponent(domain)}/archetype`, { archetype });
+// Paste an external coding agent's raw output; stored verbatim, then parsed for CONFIRMED /
+// NEW_FINDING_TYPE markers (falls back to a keyword match if no markers are present).
+export const ingestNotebookOutput = (domain, text) =>
+  send("POST", `/notebook/${encodeURIComponent(domain)}/ingest`, { text });
+// Attach a discovered subdomain under its parent in the sidebar tree.
+export const addNotebookChild = (domain, child) =>
+  send("POST", `/notebook/${encodeURIComponent(domain)}/children`, { child });
+// Permanently remove a domain's notebook. Does not cascade — any of its subdomains simply
+// resurface as their own root in the sidebar tree (see NotebookStore.delete).
+export const deleteNotebookDomain = (domain) => send("DELETE", `/notebook/${encodeURIComponent(domain)}`);
+// Record a manually-noted exploit-chain step from one node to another, for the mind-map.
+export const addNotebookChain = (domain, fromNode, toNode, note = "") =>
+  send("POST", `/notebook/${encodeURIComponent(domain)}/chains`, {
+    from_node: fromNode,
+    to_node: toNode,
+    note,
+  });
+
 // ── Vuln search (catalog + opt-in CVE lookup) ──
 export const vulnSearch = (q, { online = false, locale = "en" } = {}) =>
   get(`/vuln-search?q=${encodeURIComponent(q)}&online=${online ? 1 : 0}&locale=${locale}`);

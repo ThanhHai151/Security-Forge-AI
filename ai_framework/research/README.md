@@ -21,10 +21,23 @@ agent's working knowledge.
 - [`../../vuln_search/`](../../vuln_search/README.md) — CVE/technique lookups.
 - [`../memory/`](../memory/README.md) — where results are retained.
 - [`../models/`](../models/README.md) — used to summarize/distill sources.
+- [`../supervisor/`](../supervisor/README.md) — consumes `archetype.py`'s classification to
+  boost an Expert Supervisor plan with cross-domain testing priorities.
+
+## `archetype.py`
+
+Deterministic (no AI-provider call) app-archetype classification: keyword-matches a
+domain/question against a small seeded set (`SEED_ARCHETYPES`) of app kinds (HR/employee
+management, e-commerce, CMS, API-only backend), each carrying `priority_nodes` — taxonomy
+technique ids (`../taxonomy/tree.py`) to boost for that kind of app. This is the mechanism
+behind "two HR-style targets both get weak-password testing prioritized" without ever
+sharing a specific finding between the two domains — only the generic heuristic transfers,
+keyed by archetype, not by domain (`ArchetypeStore`).
 
 ## Safety
 
 Honors the project-wide network policy (online lookups are opt-in via config) and cites
 where each fact came from.
 
-**Status:** skeleton — directory purpose only.
+**Status:** `archetype.py` implemented; the broader "detect a gap -> research it -> distill
+-> remember" loop described above otherwise remains a skeleton.
