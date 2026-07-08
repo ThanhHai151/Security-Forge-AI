@@ -36,8 +36,7 @@ content source).
   external links open in a new tab, relative repo links render as quiet references.
 - **Search** — instant client-side filter across title, OWASP alias, summary, and body.
 - **Language toggle (EN ⇄ VI)** — switches UI strings and loads the `*.vi.md` content
-  variant when present, falling back to English otherwise (see
-  [`../docs/SKILLS_AND_I18N.md`](../docs/SKILLS_AND_I18N.md)).
+  variant when present, falling back to English otherwise.
 
 ## Design system
 

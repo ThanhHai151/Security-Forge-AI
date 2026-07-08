@@ -27,6 +27,11 @@ WHITEBOX_SIGNALS: dict[str, tuple[str, ...]] = {
         r"cursor\.execute\([^)]*%", r"cursor\.execute\([^)]*\+", r"\.raw\(",
         r"f[\"'][^\"']*SELECT", r"\+\s*[\"']\s*(SELECT|WHERE|FROM)", r"execute\(f[\"']",
         r"String\.format\([^)]*(SELECT|WHERE)", r"createStatement\(", r"\.query\([^)]*\+",
+        # Direct SQL passthrough — a "SQL terminal"/raw-query endpoint that runs a caller-
+        # supplied string verbatim (e.g. QLNS's `client.execute(sqlText)`), which is arbitrary
+        # SQL execution rather than classic string-concat injection.
+        r"\.execute\(\s*(sql|query|q|stmt|raw)", r"\.execute\(\s*(req|request|body|params)\.",
+        r"(req|request|body|params)\.(sql|query)\b",
     ),
     "nosql_injection": (
         r"\$where", r"\.find\(\{[^}]*req\.", r"JSON\.parse\(req\.",
@@ -81,6 +86,32 @@ def _iter_source_files(root: Path):
         except OSError:
             continue
         yield path
+
+
+def detect_techniques(project_path: str | Path) -> dict[str, int]:
+    """One pass over the source tree: which techniques show *any* signal, and how strongly.
+
+    Returns ``{node_id: files_matched}`` for every technique with at least one hit. Unlike
+    ``rank_files`` (called per-technique for a single node), this walks the tree once and tests
+    all techniques, so the supervisor can cheaply discover techniques the source reveals even
+    when the operator's question never named them (the QLNS ``/api/query`` blind-spot).
+    """
+    root = Path(project_path)
+    if not root.is_dir():
+        return {}
+    compiled = {nid: [re.compile(p) for p in pats] for nid, pats in WHITEBOX_SIGNALS.items()}
+    counts: dict[str, int] = {}
+    for i, path in enumerate(_iter_source_files(root)):
+        if i >= _MAX_FILES_SCANNED:
+            break
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for nid, pats in compiled.items():
+            if any(pat.search(text) for pat in pats):
+                counts[nid] = counts.get(nid, 0) + 1
+    return counts
 
 
 def rank_files(project_path: str | Path, node_id: str, max_results: int = 20) -> list[dict]:

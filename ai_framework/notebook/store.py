@@ -85,12 +85,15 @@ class NotebookStore:
         status: NodeStatus,
         note: str = "",
         updated_by: str = "user",
+        severity: str = "",
     ) -> Notebook:
         notebook = self.get_or_create(domain)
         node = notebook.nodes.get(node_id) or NotebookNode(id=node_id)
         node.status = status
         if note:
             node.note = note
+        if severity:
+            node.severity = severity
         node.updated_by = updated_by
         node.updated_at = datetime.now(UTC)
         node.in_progress = False  # a manual status change means testing this node concluded
@@ -99,19 +102,24 @@ class NotebookStore:
         self.save(notebook)
         return notebook
 
-    def ingest_promote(self, domain: str, node_id: str, note: str = "") -> Notebook:
+    def ingest_promote(
+        self, domain: str, node_id: str, note: str = "", severity: str = ""
+    ) -> Notebook:
         """Auto-promote ``untested -> unconfirmed`` from parsed external-agent output.
 
         Never sets ``confirmed`` and never downgrades an existing status — SecForge no
         longer executes or verifies anything itself in this flow, so it has no way to
         adversarially confirm impact. Confirming is always a human ``set_status`` call.
+        ``severity`` (from a ``[severity]`` ingest marker) is recorded even here so the
+        exported report can score the finding by impact rather than the vuln class default.
         """
         notebook = self.get_or_create(domain)
         node = notebook.nodes.get(node_id)
         if node is not None and node.status != NodeStatus.untested:
             return notebook
         return self.set_status(
-            domain, node_id, NodeStatus.unconfirmed, note=note, updated_by="ingest"
+            domain, node_id, NodeStatus.unconfirmed, note=note, updated_by="ingest",
+            severity=severity,
         )
 
     def link_finding(self, domain: str, node_id: str, finding_id: str) -> Notebook:

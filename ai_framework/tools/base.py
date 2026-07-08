@@ -3,7 +3,7 @@
 A tool is a named, schema-described, runnable action that returns a **log** (a string).
 The registry holds tools, emits their schemas for the system prompt, and executes a
 ``ToolCall`` into a ``ToolResult`` — catching errors so a misbehaving tool degrades to a
-failed result instead of crashing the loop. See ``docs/HERMES_INTEGRATION_STEPS.md`` Step 2.
+failed result instead of crashing the loop.
 """
 
 from __future__ import annotations

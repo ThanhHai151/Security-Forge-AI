@@ -19,7 +19,7 @@
 > are flagged inline. English-only (project rule).
 
 This document is methodology, not code. It complements the vulnerability corpus
-([`KNOWLEDGE_BASE.md`](KNOWLEDGE_BASE.md)) — that corpus answers *"how do I find and prove a
+(the vuln catalog under `vuln_search/catalog/`) — that corpus answers *"how do I find and prove a
 flaw?"*, this answers *"how does a real adversary operate without being seen, and how is that
 seen anyway?"* The [agent system prompt](../ai_framework/agent/system.py) carries a compressed
 version of §0–§1 as standing rules for every run.
@@ -659,7 +659,7 @@ actually target them* (threat-informed defense).
   into standing rules in the [system prompt](../ai_framework/agent/system.py) — authorization-first,
   prefer the least-noisy action that still proves the point, document every action, stay in scope,
   and don't waste effort on local artifact-destruction. When an engagement needs a specific
-  technique, the agent recalls the relevant §2–§8 principle and the [KB corpus](KNOWLEDGE_BASE.md).
+  technique, the agent recalls the relevant §2–§8 principle and the vuln catalog corpus.
 - **For the defensive pillar ([`defense/`](../defense/README.md)):** the *detection counterpart*
   of each section is the checklist for "would this target see the attack?" — TLS/JA4+ visibility,
   process telemetry (Sysmon) and kernel-ETW call-stack analysis, log forwarding/SIEM immutability,

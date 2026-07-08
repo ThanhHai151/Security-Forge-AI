@@ -1,6 +1,6 @@
 """Headroom — context-window budgeting & compaction.
 
-Sits between the agent loop and the model backend (INTEGRATION_PLAN.md §3): it measures
+Sits between the agent loop and the model backend: it measures
 how many tokens the assembled request needs and, when that would eat into the reserved
 output headroom, compacts the request along a fixed priority ladder — never silently,
 always producing a ``CompactionReport``. It does not reason; it measures and shapes.

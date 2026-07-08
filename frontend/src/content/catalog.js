@@ -18,8 +18,8 @@ const INDEX_FILE = import.meta.glob(
   "../../../vuln_search/catalog/INDEX.md",
   { query: "?raw", import: "default", eager: true }
 );
-// Design-note references that live in `docs/` (not vuln classes). Only files on the
-// whitelist below are surfaced on the viewer — the rest of `docs/` is internal build notes.
+// Content docs that live in `docs/` (not vuln classes) and are surfaced in the viewer —
+// only files on the whitelist below are shown.
 const DOC_FILES = import.meta.glob(
   "../../../docs/*.md",
   { query: "?raw", import: "default", eager: true }

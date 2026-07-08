@@ -25,8 +25,7 @@ plans a pentest and hands the strategy to a coding agent (e.g. Claude Code) to c
 - **Reporting** — export a domain's findings as SARIF 2.1.0 for CI / code-scanning upload.
 - **Bilingual** — the UI and displayed content switch between English and Vietnamese.
 
-Full architecture and data flow: [`ARCHITECTURE.md`](ARCHITECTURE.md). See
-[`docs/STRIX_PARITY_PLAN.md`](docs/STRIX_PARITY_PLAN.md) for the current roadmap.
+Full architecture and data flow: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 

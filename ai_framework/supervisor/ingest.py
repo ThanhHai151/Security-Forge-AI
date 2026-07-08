@@ -18,7 +18,8 @@ from ai_framework.notebook.store import NotebookStore
 from ai_framework.taxonomy.tree import Taxonomy
 
 _CONFIRMED_RE = re.compile(
-    r"^\s*CONFIRMED:\s*(.+?)\s*[-—]\s*(.+)$", re.IGNORECASE | re.MULTILINE
+    r"^\s*CONFIRMED:\s*(.+?)\s*(?:\[(critical|high|medium|low|info)\]\s*)?[-—]\s*(.+)$",
+    re.IGNORECASE | re.MULTILINE,
 )
 _NEW_FINDING_RE = re.compile(
     r"^\s*NEW_FINDING_TYPE:\s*(.+?)\s*[-—]\s*JUSTIFICATION:\s*(.+)$",
@@ -48,12 +49,14 @@ def ingest_output(
     result = IngestResult()
 
     for match in _CONFIRMED_RE.finditer(raw_text):
-        technique_text, evidence = match.group(1), match.group(2)
+        technique_text = match.group(1)
+        severity = (match.group(2) or "").lower()
+        evidence = match.group(3)
         hits = taxonomy.match_text(technique_text)
         if not hits:
             continue
         node_id = hits[0].id
-        notebooks.ingest_promote(identity, node_id, note=evidence.strip())
+        notebooks.ingest_promote(identity, node_id, note=evidence.strip(), severity=severity)
         if node_id not in result.promoted:
             result.promoted.append(node_id)
 

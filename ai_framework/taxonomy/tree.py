@@ -47,6 +47,10 @@ TECHNIQUE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "sql_injection": (
         "sql injection", "sqli", "sqlmap", "union select", "' or 1=1", "boolean-based",
         "lỗi sql injection", "lỗi sql", "tiêm sql", "chèn sql",
+        # A raw-SQL/"SQL terminal" endpoint is arbitrary SQL execution — same class of risk,
+        # so route these phrasings here too (the QLNS /api/query blind-spot).
+        "sql terminal", "sql console", "arbitrary sql", "raw sql", "raw query", "execute sql",
+        "run sql", "query endpoint", "/query", "chạy sql", "thực thi sql",
     ),
     "nosql_injection": (
         "nosql", "nosql injection", "$where", "$ne", "mongodb", "tiêm nosql",
@@ -117,6 +121,8 @@ TECHNIQUE_KEYWORDS: dict[str, tuple[str, ...]] = {
     ),
     "api_security": (
         "api security", "rest api", "bảo mật api",
+        "api endpoint", "rest endpoint", "/api/", "endpoint", "unauthenticated endpoint",
+        "open endpoint", "điểm cuối api",
     ),
     "graphql": (
         "graphql", "introspection", "__schema",

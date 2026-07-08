@@ -34,6 +34,12 @@ class NotebookNode(BaseModel):
     id: str  # taxonomy technique node id (e.g. "sql_injection") or "custom:<slug>"
     status: NodeStatus = NodeStatus.untested
     note: str = ""
+    # Per-finding impact, supplied by whoever confirms it (the external agent via a
+    # `[severity]` ingest marker, or a human) — "" means "unknown, fall back to the class
+    # default". SecForge never executes, so it can't derive this itself; the reporting layer
+    # (report/sarif.py) uses it to score this instance instead of the vuln class's generic
+    # severity. One of: critical | high | medium | low | info (or "").
+    severity: str = ""
     finding_ids: list[str] = Field(default_factory=list)
     updated_by: str = ""  # "user" | "ingest"
     updated_at: datetime = Field(default_factory=_now)

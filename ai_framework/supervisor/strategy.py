@@ -14,7 +14,7 @@ from ai_framework.research.archetype import ArchetypeHeuristic
 from ai_framework.skills.loader import Skill, SkillRegistry
 from ai_framework.supervisor.contracts import PlanStep, SessionContext
 from ai_framework.taxonomy.tree import Taxonomy
-from ai_framework.taxonomy.whitebox_signals import rank_files, signals_for
+from ai_framework.taxonomy.whitebox_signals import detect_techniques, rank_files, signals_for
 
 MAX_PLAN_STEPS = 8
 
@@ -100,20 +100,29 @@ def rank_technique_nodes(
         # No specific technique named in the question — fall back to every technique so
         # notebook status / archetype boosting still produce a sensible general order.
         matched = [n.id for n in taxonomy.technique_nodes()]
+    matched_set = set(matched)
     boosted = set(archetype.priority_nodes) if archetype else set()
+    # Whitebox: let the source itself surface techniques the question never named (so a raw
+    # SQL endpoint or an auth flaw shows up even if the operator only asked about something
+    # else). Blackbox leaves this empty — there's no local source to scan.
+    source_hits: dict[str, int] = {}
+    if ctx.mode == "whitebox" and ctx.project_path:
+        source_hits = detect_techniques(ctx.project_path)
     is_quick = resolve_scan_mode(ctx.scan_mode) == "quick"
     high_impact_rank = {node_id: i for i, node_id in enumerate(HIGH_IMPACT_NODES)}
 
-    def sort_key(node_id: str) -> tuple[int, int, int, int]:
+    def sort_key(node_id: str) -> tuple[int, int, int, int, int, int]:
         return (
             # quick mode leads with high-impact classes; other modes ignore this tier (all 0).
             high_impact_rank.get(node_id, len(HIGH_IMPACT_NODES)) if is_quick else 0,
-            0 if node_id in boosted else 1,
+            0 if node_id in matched_set else 1,  # question-named techniques lead
+            -source_hits.get(node_id, 0),  # then strongest source signal (whitebox)
+            0 if node_id in boosted else 1,  # then archetype-boosted
             _status_rank(_node_status(notebook, node_id)),
             matched.index(node_id) if node_id in matched else len(matched),
         )
 
-    return sorted(set(matched) | boosted, key=sort_key)
+    return sorted(matched_set | boosted | set(source_hits), key=sort_key)
 
 
 def build_plan(

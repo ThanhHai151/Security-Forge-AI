@@ -2,8 +2,7 @@
 
 Headroom sits **between the agent loop and the model backend**. It does not reason; it
 *measures and shapes* what reaches the backend so every model call stays inside the context
-window with deliberate slack ("headroom") reserved for the model's own output. See
-[`docs/INTEGRATION_PLAN.md` §3](../../docs/INTEGRATION_PLAN.md).
+window with deliberate slack ("headroom") reserved for the model's own output.
 
 ```
 agent loop ──builds TurnRequest──▶ [ headroom.fit ] ──FittedRequest──▶ models backend

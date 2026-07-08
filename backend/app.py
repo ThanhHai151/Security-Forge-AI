@@ -502,6 +502,7 @@ def make_handler(
                         b.get("status", "untested"),
                         note=b.get("note", ""),
                         finding=b.get("finding"),
+                        severity=b.get("severity", ""),
                     )
                 except ValueError as exc:
                     return self._send(400, {"error": str(exc)})

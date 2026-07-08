@@ -20,7 +20,7 @@
 > tiếng Việt này là ngoại lệ được yêu cầu rõ ràng).
 
 Tài liệu này là phương pháp luận, không phải mã. Nó bổ trợ cho kho ngữ liệu lỗ hổng
-([`KNOWLEDGE_BASE.md`](KNOWLEDGE_BASE.md)) — kho đó trả lời *"làm sao tôi tìm và chứng minh một
+(danh mục lỗ hổng trong `vuln_search/catalog/`) — kho đó trả lời *"làm sao tôi tìm và chứng minh một
 lỗ hổng?"*, còn tệp này trả lời *"một đối thủ thực thụ vận hành mà không bị nhìn thấy như thế nào,
 và điều đó vẫn bị nhìn thấy ra sao?"* [System prompt của agent](../ai_framework/agent/system.py)
 mang một phiên bản nén của §0–§1 làm các quy tắc thường trực cho mọi lần chạy.
@@ -645,7 +645,7 @@ hay không (phòng thủ theo tình báo mối đe dọa — threat-informed def
   tắc thường trực trong [system prompt](../ai_framework/agent/system.py) — ưu tiên ủy quyền, chọn hành động
   ít-ồn-ào-nhất mà vẫn chứng minh được luận điểm, ghi nhận mọi hành động, ở trong phạm vi, và đừng lãng phí
   công sức vào phá-hủy-tạo-tác cục bộ. Khi một cuộc đánh giá cần một kỹ thuật cụ thể, agent gợi lại nguyên
-  tắc §2–§8 liên quan và [kho ngữ liệu KB](KNOWLEDGE_BASE.md).
+  tắc §2–§8 liên quan và danh mục lỗ hổng.
 - **Cho trụ cột phòng thủ ([`defense/`](../defense/README.md)):** *đối trọng phát hiện* của mỗi phần là danh
   mục kiểm tra cho "liệu mục tiêu này có thấy được cuộc tấn công không?" — khả năng thấy TLS/JA4+, telemetry
   process (Sysmon) và phân tích call-stack kernel-ETW, forwarding log/tính bất biến SIEM, giám sát can thiệp

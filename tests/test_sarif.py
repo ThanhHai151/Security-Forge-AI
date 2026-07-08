@@ -75,6 +75,28 @@ def test_custom_node_uses_its_note_as_label_and_does_not_crash():
     assert "security-severity" in rule["properties"]
 
 
+def test_explicit_severity_overrides_the_class_default():
+    # information_disclosure's class default is a middling ~5.3, but a leaked live DB token is
+    # critical — the per-finding severity must win, and drive the SARIF level to "error".
+    nodes = {
+        "information_disclosure": NotebookNode(
+            id="information_disclosure", status=NodeStatus.confirmed,
+            note="live DB tokens leaked in /api/query response", severity="critical",
+        ),
+        "clickjacking": NotebookNode(id="clickjacking", status=NodeStatus.confirmed),  # no sev
+    }
+    doc = notebook_to_sarif(_nb(nodes))
+    run = doc["runs"][0]
+    rules = {r["id"]: r for r in run["tool"]["driver"]["rules"]}
+    results = {r["ruleId"]: r for r in run["results"]}
+    # explicit critical -> 9.5 + error
+    assert float(rules["information_disclosure"]["properties"]["security-severity"]) == 9.5
+    assert results["information_disclosure"]["level"] == "error"
+    assert results["information_disclosure"]["properties"]["severity"] == "critical"
+    # no explicit severity -> class default retained (clickjacking ~4.3)
+    assert float(rules["clickjacking"]["properties"]["security-severity"]) < 6.0
+
+
 def test_fingerprint_is_stable_and_scoped_to_domain_and_node():
     node = {"sql_injection": NotebookNode(id="sql_injection", status=NodeStatus.confirmed)}
     fp1 = notebook_to_sarif(_nb(node))["runs"][0]["results"][0]["partialFingerprints"]

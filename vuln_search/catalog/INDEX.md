@@ -9,8 +9,8 @@ blogs). Each card links to its **deep-dive note** in
 
 New entries: copy [`ENTRY_TEMPLATE.md`](ENTRY_TEMPLATE.md) into `<slug>/README.md`.
 Status legend: ✅ complete · 🟡 stub (headings + CVE-search links, prose pending). **🇻🇳** = a
-Vietnamese `README.vi.md` exists. Bilingual conventions: [`docs/SKILLS_AND_I18N.md`](../../docs/SKILLS_AND_I18N.md)
-(English canonical, `*.vi.md` sibling, one language loaded at a time).
+Vietnamese `README.vi.md` exists. Bilingual convention: English canonical, `*.vi.md` sibling,
+one language loaded at a time.
 
 ## Injection
 - ✅ 🇻🇳 [SQL Injection](sql_injection/README.md)

@@ -46,5 +46,4 @@ NousResearch / **hermes-agent** — the agentic loop and its tool-calling style.
 **Status:** implemented (offline + Claude backends). The Hermes turn protocol, loop, and
 log-driven planner live in `loop.py` / `contracts.py` / `system.py`; the loop-breaker,
 OPSEC pacer, and durable run store are `guardrails.py` / `opsec.py` / `run_store.py` (all
-opt-in collaborators of `run_loop`). See
-[`docs/HERMES_INTEGRATION_STEPS.md`](../../docs/HERMES_INTEGRATION_STEPS.md).
+opt-in collaborators of `run_loop`).

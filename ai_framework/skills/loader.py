@@ -1,7 +1,7 @@
 """Skill loader — discover ``SKILL.md`` manifests and serve them on demand (progressive disclosure).
 
 Each skill is one directory with a canonical ``SKILL.md`` (English) and optional
-``SKILL.<locale>.md`` siblings (see ``docs/SKILLS_AND_I18N.md``). The agent never carries every
+``SKILL.<locale>.md`` siblings. The agent never carries every
 skill's full text: the system prompt lists only a compact **catalog** (name + when-to-use
 trigger), and the model pulls the full procedure with the ``load_skill`` tool when a trigger
 actually matches. That keeps the context window lean while making all tradecraft reachable.

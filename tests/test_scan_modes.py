@@ -93,6 +93,42 @@ def test_methodology_block_includes_fix_step_only_in_whitebox(tmp_path):
     assert "**Fix**" in white.context_block
 
 
+def test_whitebox_surfaces_a_source_detected_technique_not_named_in_the_question(tmp_path):
+    # Regression for the QLNS /api/query blind-spot: a raw-SQL passthrough endpoint in the
+    # source must show up in the plan even though the operator only asked about auth.
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "query.ts").write_text(
+        "export async function runQuery(req) {\n"
+        "  const sqlText = req.body.sql;\n"
+        "  return await client.execute(sqlText);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    svc = _service(tmp_path)
+    advice = svc.advise(
+        SessionContext(
+            domain="wb-src.example.test",
+            question="check the authentication logic",  # names auth, NOT sql
+            mode="whitebox",
+            project_path=str(project),
+        )
+    )
+    refs = {s.taxonomy_ref for s in advice.plan}
+    assert "sql_injection" in refs  # discovered from source, not from the question
+
+
+def test_endpoint_phrasing_routes_to_api_and_sql_techniques(tmp_path):
+    # "the /api/query endpoint" should reach both api_security and sql_injection now.
+    svc = _service(tmp_path)
+    advice = svc.advise(
+        SessionContext(domain="ep.example.test", question="please test the /api/query endpoint")
+    )
+    refs = {s.taxonomy_ref for s in advice.plan}
+    assert "sql_injection" in refs
+    assert "api_security" in refs
+
+
 def test_backend_advise_forwards_scan_mode(tmp_path):
     # The RunService.advise wrapper (what the HTTP handler calls) must forward scan_mode into
     # the SessionContext so the posture reaches the briefing. Stores nulled/temp'd to keep the

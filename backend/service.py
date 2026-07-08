@@ -246,14 +246,16 @@ class RunService:
         status: str,
         note: str = "",
         finding: dict | None = None,
+        severity: str = "",
     ) -> dict:
         """Set one node's status. A human-set ``confirmed`` also writes a linked ``Finding``
         (auto-ingest never reaches this path with ``confirmed`` — see
         ``NotebookStore.ingest_promote``). This always clears ``in_progress`` on the node —
-        see ``NotebookStore.set_status``."""
+        see ``NotebookStore.set_status``. ``severity`` (critical|high|medium|low|info) scores
+        the finding by real impact in the exported report/SARIF."""
         node_status = NodeStatus(status)
         notebook = self.supervisor.notebooks.set_status(
-            domain, node_id, node_status, note=note, updated_by="user"
+            domain, node_id, node_status, note=note, updated_by="user", severity=severity,
         )
         store = self._findings()
         if node_status == NodeStatus.confirmed and finding and store is not None:

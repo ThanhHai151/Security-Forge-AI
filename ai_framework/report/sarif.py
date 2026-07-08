@@ -67,6 +67,14 @@ _SEVERITY_BY_NODE: dict[str, float] = {
 }
 _DEFAULT_SEVERITY = 5.0
 
+# When a finding carries an explicit per-instance severity (from whoever confirmed it — see
+# NotebookNode.severity), it overrides the class default: a token-leak filed as "critical"
+# scores 9.5, not information_disclosure's generic 5.3.
+_SEVERITY_LABEL_SCORE = {"critical": 9.5, "high": 8.0, "medium": 5.5, "low": 3.0, "info": 0.5}
+_SEVERITY_LABEL_LEVEL = {
+    "critical": "error", "high": "error", "medium": "warning", "low": "note", "info": "note",
+}
+
 # STRIDE leg(s) per catalog slug: S(poofing) T(ampering) R(epudiation) I(nfo disclosure)
 # D(enial of service) E(levation of privilege). Default ("T", "I") for anything unmapped,
 # matching the reference tool's fallback.
@@ -122,7 +130,14 @@ def _label_for(node_id: str, node: NotebookNode, taxonomy: Taxonomy | None) -> s
     return node_id
 
 
-def _rule_for(node_id: str, label: str) -> dict[str, Any]:
+def _severity_score(node_id: str, severity: str) -> float:
+    """Per-instance severity wins over the class default when present."""
+    if severity in _SEVERITY_LABEL_SCORE:
+        return _SEVERITY_LABEL_SCORE[severity]
+    return _SEVERITY_BY_NODE.get(node_id, _DEFAULT_SEVERITY)
+
+
+def _rule_for(node_id: str, label: str, severity: str = "") -> dict[str, Any]:
     m = mapping_for(node_id)
     cwes: list[str] = list(m.get("cwe") or [])
     owasp = str(m.get("owasp") or "")
@@ -149,7 +164,7 @@ def _rule_for(node_id: str, label: str) -> dict[str, Any]:
         "name": "".join(part.capitalize() for part in node_id.split("_")),
         "shortDescription": {"text": label},
         "properties": {
-            "security-severity": f"{_SEVERITY_BY_NODE.get(node_id, _DEFAULT_SEVERITY):.1f}",
+            "security-severity": f"{_severity_score(node_id, severity):.1f}",
             "tags": tags,
         },
     }
@@ -167,9 +182,12 @@ def _result_for(node_id: str, node: NotebookNode, label: str, domain: str) -> di
     if node.is_custom and node.justification:
         text += f" (custom finding: {node.justification})"
     fingerprint = hashlib.sha256(f"{domain}:{node_id}".encode()).hexdigest()[:16]
+    # An explicit per-finding severity sets the SARIF level (critical/high -> error, etc.);
+    # otherwise fall back to the status (confirmed -> error, unconfirmed -> warning).
+    level = _SEVERITY_LABEL_LEVEL.get(node.severity, _LEVEL_BY_STATUS.get(node.status, "warning"))
     return {
         "ruleId": node_id,
-        "level": _LEVEL_BY_STATUS.get(node.status, "warning"),
+        "level": level,
         "message": {"text": text},
         "locations": [
             {"logicalLocations": [{"name": domain, "kind": "resource"}]},
@@ -177,6 +195,7 @@ def _result_for(node_id: str, node: NotebookNode, label: str, domain: str) -> di
         "partialFingerprints": {"secforgePrimary": fingerprint},
         "properties": {
             "status": status,
+            "severity": node.severity,
             "taxonomy_ref": node_id,
             "is_custom": node.is_custom,
             "cwe": list(m.get("cwe") or []),
@@ -203,7 +222,7 @@ def notebook_to_sarif(
             continue
         label = _label_for(node_id, node, taxonomy)
         if node_id not in seen_rules:
-            rules.append(_rule_for(node_id, label))
+            rules.append(_rule_for(node_id, label, node.severity))
             seen_rules.add(node_id)
         results.append(_result_for(node_id, node, label, notebook.domain))
 

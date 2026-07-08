@@ -26,7 +26,7 @@ def estimate_tokens(text: str) -> int:
 
 
 # The active counter. Everything in Headroom counts through ``count_tokens`` so an exact
-# tokenizer can be installed in exactly one place (INTEGRATION_PLAN §6 open question).
+# tokenizer can be installed in exactly one place.
 _counter: Callable[[str], int] = estimate_tokens
 
 

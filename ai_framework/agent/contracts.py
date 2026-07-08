@@ -2,8 +2,7 @@
 
 These pydantic models are the wire format for the whole loop: every turn, tool call,
 tool result, and memory record round-trips through JSON so a run can be logged, diffed,
-and replayed. See ``docs/HERMES_INTEGRATION_STEPS.md`` Step 1 and
-``docs/INTEGRATION_PLAN.md`` §2.2 / §2.4.
+and replayed.
 """
 
 from __future__ import annotations
@@ -114,7 +113,7 @@ class Run(BaseModel):
     compaction_reports: list[CompactionReport] = Field(default_factory=list)
 
 
-# --- Headroom: context-window budgeting & compaction (INTEGRATION_PLAN.md §3) ----
+# --- Headroom: context-window budgeting & compaction ----
 
 
 class Budget(BaseModel):

@@ -29,17 +29,15 @@ model isn't drowned in all 32 topics at once.
 
 ## Source corpus
 
-The 32 technique topics are sourced from the web-security knowledge corpus documented in
-[`docs/KNOWLEDGE_BASE.md`](../../docs/KNOWLEDGE_BASE.md) (lives at `../Troubleshooting_Guide/`,
-external to the repo). That doc describes the corpus and how a thin loader here turns each file
-into a skill summary for the system prompt + an on-demand retrieval call.
+The 32 technique topics are sourced from the web-security knowledge corpus (the vuln catalog
+under `vuln_search/catalog/`). A thin loader here turns each file into a skill summary for the
+system prompt + an on-demand retrieval call.
 
 ## Format & i18n
 
 Skills follow the [agentskills.io](https://agentskills.io) `SKILL.md` standard (YAML frontmatter +
 four sections: When to Use · Prerequisites · Workflow · Verification) and are **bilingual**
-(English canonical `SKILL.md` + Vietnamese `SKILL.vi.md` sibling). Full design, frontmatter spec,
-and the i18n resolver convention: [`docs/SKILLS_AND_I18N.md`](../../docs/SKILLS_AND_I18N.md).
+(English canonical `SKILL.md` + Vietnamese `SKILL.vi.md` sibling, one language loaded at a time).
 
 - Template: [`SKILL_TEMPLATE.md`](SKILL_TEMPLATE.md)
 - Worked example: [`exploiting-sql-injection/`](exploiting-sql-injection/SKILL.md)

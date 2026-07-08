@@ -24,6 +24,24 @@ def test_confirmed_marker_promotes_the_matched_technique(tmp_path):
     assert "union-based" in node.note
 
 
+def test_confirmed_marker_records_optional_severity_tag(tmp_path):
+    notebooks, taxonomy, raw_log = _stores(tmp_path)
+    text = "CONFIRMED: SQL Injection [critical] — POST /api/query runs arbitrary SQL unauth"
+    result = ingest_output("example.test.com", text, notebooks, taxonomy, raw_log)
+    assert result.promoted == ["sql_injection"]
+    node = notebooks.load("example.test.com").nodes["sql_injection"]
+    assert node.severity == "critical"
+    assert "arbitrary SQL" in node.note  # the [critical] tag is stripped from the evidence
+    assert "[critical]" not in node.note
+
+
+def test_confirmed_marker_without_severity_leaves_it_blank(tmp_path):
+    notebooks, taxonomy, raw_log = _stores(tmp_path)
+    ingest_output("example.test.com", "CONFIRMED: xss - reflected in q param",
+                  notebooks, taxonomy, raw_log)
+    assert notebooks.load("example.test.com").nodes["xss"].severity == ""
+
+
 def test_new_finding_type_marker_files_a_custom_node_with_justification(tmp_path):
     notebooks, taxonomy, raw_log = _stores(tmp_path)
     text = "NEW_FINDING_TYPE: Business logic race - JUSTIFICATION: duplicate coupon redemption"

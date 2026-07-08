@@ -80,8 +80,13 @@ _REPORTING_INSTRUCTIONS = """## Reporting back (keeps this notebook accurate)
 When you finish investigating, report results using these exact marker lines so they can be
 mechanically recorded here (one marker per line, anywhere in your final message):
 
-CONFIRMED: <technique name> — <evidence / how you confirmed it>
+CONFIRMED: <technique name> [<severity>] — <evidence / how you confirmed it>
 NEW_FINDING_TYPE: <short label> — JUSTIFICATION: <why this isn't one of the existing categories>
+
+`[<severity>]` is optional but recommended — one of critical|high|medium|low|info, scored by
+real impact on THIS target (e.g. unauth full-DB write or leaked live credentials = critical).
+It sets the exported report/SARIF severity for the finding instead of a generic class default.
+Example: `CONFIRMED: SQL Injection [critical] — POST /api/query runs arbitrary SQL unauthenticated`
 
 Only use NEW_FINDING_TYPE for something that doesn't fit any existing technique — don't
 invent a new category for something that's really just SQL injection, XSS, SSRF, etc. under
