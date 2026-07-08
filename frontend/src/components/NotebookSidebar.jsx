@@ -30,11 +30,11 @@ function RowMenu({ onViewMap, onDelete, t }) {
         title={t.notebookRowMenu}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`w-5 h-5 flex items-center justify-center transition-colors ${
-          open ? "text-emerald-400" : "text-zinc-500 hover:text-zinc-100"
+        className={`w-7 h-7 flex items-center justify-center transition-colors ${
+          open ? "text-emerald-400" : "text-zinc-300 hover:text-zinc-100"
         }`}
       >
-        <DotsThreeVertical size={13} weight="bold" />
+        <DotsThreeVertical size={14} weight="bold" />
       </button>
 
       {open && (
@@ -80,7 +80,7 @@ function DeleteConfirm({ domain, onConfirm, onClose, t }) {
       <div className="flex justify-end gap-2 pt-1">
         <button
           onClick={onClose}
-          className="px-3 py-1.5 text-[12.5px] font-medium border border-white/[0.08] text-zinc-400 hover:text-zinc-200 transition-colors"
+          className="px-3 py-1.5 text-[12.5px] font-medium border border-white/[0.08] text-zinc-300 hover:text-zinc-100 transition-colors"
         >
           {t.chainClose}
         </button>
@@ -140,13 +140,14 @@ function DomainRow({ node, depth, activeDomain, onSelectDomain, onOpenDomainMap,
         {hasChildren ? (
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="shrink-0 text-zinc-400 hover:text-zinc-100"
+            className="shrink-0 w-6 h-6 flex items-center justify-center text-zinc-300 hover:text-zinc-100"
             aria-label={expanded ? "Collapse" : "Expand"}
+            aria-expanded={expanded}
           >
             {expanded ? <CaretDown size={11} /> : <CaretRight size={11} />}
           </button>
         ) : (
-          <span className="w-[11px] shrink-0" />
+          <span className="w-6 shrink-0" />
         )}
         <button
           onClick={onClick}
@@ -159,7 +160,7 @@ function DomainRow({ node, depth, activeDomain, onSelectDomain, onOpenDomainMap,
           }`}
         >
           {node.domain}
-          <span className="ml-1.5 text-[10.5px] font-mono text-zinc-400">
+          <span className="ml-1.5 text-[11px] font-mono text-zinc-300">
             {node.confirmed}/{node.total}
           </span>
         </button>
@@ -167,28 +168,32 @@ function DomainRow({ node, depth, activeDomain, onSelectDomain, onOpenDomainMap,
           onClick={() => setAdding((v) => !v)}
           aria-label={t.notebookAddChild}
           title={t.notebookAddChild}
-          className="shrink-0 w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-emerald-400"
+          className="shrink-0 w-7 h-7 flex items-center justify-center text-zinc-300 hover:text-emerald-400"
         >
-          <Plus size={12} weight="bold" />
+          <Plus size={13} weight="bold" />
         </button>
       </div>
 
       {adding && (
         <div className="flex gap-1 mt-1 mb-1 ml-7">
-          <input
-            value={childInput}
-            onChange={(e) => setChildInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitChild()}
-            placeholder={t.notebookChildPlaceholder}
-            autoFocus
-            className="flex-1 min-w-0 bg-zinc-900/60 border border-white/[0.08] px-2 py-1 text-[11.5px]
-                       text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/50 outline-none"
-          />
+          <label className="flex-1 min-w-0">
+            <span className="sr-only">{t.notebookAddChild}</span>
+            <input
+              value={childInput}
+              onChange={(e) => setChildInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitChild()}
+              placeholder={t.notebookChildPlaceholder}
+              autoFocus
+              className="w-full bg-zinc-900/60 border border-white/[0.08] px-2 py-1.5 text-[12px]
+                         text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500/50 outline-none"
+            />
+          </label>
           <button
             onClick={submitChild}
-            className="shrink-0 px-2 text-[11px] font-medium bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25"
+            aria-label={t.notebookAddChild}
+            className="shrink-0 w-8 flex items-center justify-center text-[11px] font-medium bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25"
           >
-            <Plus size={11} weight="bold" />
+            <Plus size={12} weight="bold" />
           </button>
         </div>
       )}
@@ -240,34 +245,40 @@ export default function NotebookSidebar({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex gap-1.5 mb-3 shrink-0">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder={t.supDomainPlaceholder}
-          className="flex-1 min-w-0 bg-zinc-900/60 border border-white/[0.08] px-2.5 py-2 text-[12.5px]
-                     text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/50 outline-none
-                     transition-colors"
-        />
-        <button
-          onClick={submit}
-          aria-label={t.notebookNewDomain}
-          title={t.notebookNewDomain}
-          className="shrink-0 flex items-center justify-center w-9 h-9 bg-emerald-500/15
-                     border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
-        >
-          <Plus size={14} weight="bold" />
-        </button>
+      <div className="mb-3 shrink-0">
+        <label htmlFor="notebook-domain-input" className="block text-[11px] font-mono uppercase tracking-wider text-zinc-300 mb-1">
+          {t.supDomain}
+        </label>
+        <div className="flex gap-1.5">
+          <input
+            id="notebook-domain-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder={t.supDomainPlaceholder}
+            className="flex-1 min-w-0 bg-zinc-900/60 border border-white/[0.08] px-2.5 py-2 text-[12.5px]
+                       text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500/50 outline-none
+                       transition-colors"
+          />
+          <button
+            onClick={submit}
+            aria-label={t.notebookNewDomain}
+            title={t.notebookNewDomain}
+            className="shrink-0 flex items-center justify-center w-9 h-9 bg-emerald-500/15
+                       border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
+          >
+            <Plus size={14} weight="bold" />
+          </button>
+        </div>
       </div>
 
-      <p className="px-0.5 pb-2 text-[11px] font-mono uppercase tracking-wider text-zinc-400 shrink-0 flex items-center gap-1.5">
+      <h2 className="px-0.5 pb-2 text-[11px] font-mono uppercase tracking-wider text-zinc-300 shrink-0 flex items-center gap-1.5">
         <BookOpen size={12} /> {t.notebookHeading}
-      </p>
+      </h2>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-0.5 pr-0.5">
         {roots.length === 0 ? (
-          <p className="text-[12px] text-zinc-400 px-0.5">{t.notebookNoDomains}</p>
+          <p className="text-[12px] text-zinc-300 px-0.5">{t.notebookNoDomains}</p>
         ) : (
           roots.map((root) => (
             <DomainRow

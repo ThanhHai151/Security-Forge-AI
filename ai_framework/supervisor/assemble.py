@@ -15,7 +15,66 @@ from ai_framework.notebook.contracts import NodeStatus, Notebook
 from ai_framework.research.archetype import ArchetypeHeuristic
 from ai_framework.skills.loader import Skill, SkillRegistry
 from ai_framework.supervisor.contracts import PlanStep, SkillRef
+from ai_framework.supervisor.strategy import resolve_scan_mode
 from ai_framework.taxonomy.tree import Taxonomy
+
+# Depth posture per scan mode, rendered near the top of the briefing so the external agent
+# knows how far to push before it starts. Mirrors the reference tool's quick/standard/deep
+# scan-mode skills, condensed to one paragraph each.
+_SCAN_MODE_POSTURE: dict[str, str] = {
+    "quick": (
+        "**Scan mode: quick (time-boxed triage).** Lead with the high-impact classes below; "
+        "skip exhaustive enumeration and low-severity or purely theoretical issues. Prove the "
+        "few things that actually matter with a minimal proof-of-concept, then move on."
+    ),
+    "standard": (
+        "**Scan mode: standard (balanced).** Cover the full attack surface for the techniques "
+        "below without exhaustive depth: map the surface, test systematically area by area, "
+        "then validate every candidate with a concrete proof-of-concept."
+    ),
+    "deep": (
+        "**Scan mode: deep (exhaustive).** Map everything, test every input vector with "
+        "multiple techniques, and actively chain findings. Treat low-severity issues as pivots, "
+        "not noise; keep going until the high-value paths are genuinely exhausted."
+    ),
+}
+
+
+def _render_scan_mode(scan_mode: str) -> str:
+    return _SCAN_MODE_POSTURE[resolve_scan_mode(scan_mode)]
+
+
+def _render_methodology(scan_mode: str, mode: str) -> str:
+    """The per-technique investigation loop handed to the external agent.
+
+    Adapted from the reference tool's Discovery -> Validation -> Reporting (-> Fixing) agent
+    chain, but expressed as instructions for one coding agent to follow rather than a swarm to
+    spawn. The Fix step is only included for whitebox (source-available) engagements.
+    """
+    steps = [
+        "1. **Discovery** — map the attack surface for the class (endpoints, parameters, "
+        "inputs, sinks). Prefer established scanners/tools to enumerate; don't hand-test what "
+        "a tool can sweep.",
+        "2. **Validation** — reproduce it with a concrete, working proof-of-concept. A scanner "
+        "hit or a suspicious code path is a lead, not a finding.",
+        "3. **Report** — only once reproduced, emit a `CONFIRMED` marker (see below) with the "
+        "evidence: the request/response, the payload, or the code + line that proves it.",
+    ]
+    if mode == "whitebox":
+        steps.append(
+            "4. **Fix** — after reporting, patch the code in place, then re-test to confirm the "
+            "fix removes the issue; include the diff in your evidence."
+        )
+    intro = (
+        "Work each technique in the investigation order as a focused, single-purpose task — "
+        "one technique × one component at a time, don't mix jobs:"
+    )
+    chain = (
+        "Chain findings wherever one enables another (IDOR → account takeover, SSRF → cloud "
+        "metadata → credentials) — a chain is worth more than the sum of its parts."
+    )
+    return "\n".join(["## Methodology — run this loop per technique", intro, *steps, chain])
+
 
 _REPORTING_INSTRUCTIONS = """## Reporting back (keeps this notebook accurate)
 When you finish investigating, report results using these exact marker lines so they can be
@@ -93,8 +152,12 @@ def render_context_block(
     notebook: Notebook | None = None,
     archetype: ArchetypeHeuristic | None = None,
     locale: str = "en",
+    scan_mode: str = "standard",
+    mode: str = "blackbox",
 ) -> str:
     lines: list[str] = ["# Expert Supervisor briefing", ""]
+    lines.append(_render_scan_mode(scan_mode))
+    lines.append("")
 
     notebook_block = _render_notebook_status(notebook, archetype, taxonomy)
     if notebook_block:
@@ -105,6 +168,8 @@ def render_context_block(
         lines.append("## Investigation order (highest signal first)")
         for step in plan:
             lines.append(f"{step.order}. {step.action} — {step.reasoning}")
+        lines.append("")
+        lines.append(_render_methodology(scan_mode, mode))
         lines.append("")
     if selected_skills:
         lines.append("## Selected skill(s) — full workflow")

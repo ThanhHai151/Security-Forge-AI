@@ -10,7 +10,7 @@ const FILTER_OPTIONS = ["all", "confirmed", "unconfirmed", "untested"];
 const STATUS_CLS = {
   confirmed: "text-red-300 border-red-500/30 bg-red-500/[0.07]",
   unconfirmed: "text-amber-300 border-amber-500/30 bg-amber-500/[0.07]",
-  untested: "text-zinc-500 border-white/[0.08] bg-transparent",
+  untested: "text-zinc-300 border-white/[0.08] bg-transparent",
 };
 
 function statusLabel(status, t) {
@@ -25,12 +25,13 @@ function filterLabel(value, t) {
 
 // `capitalize` (CSS text-transform) renders these as "Confirmed"/"Untested"/etc. without
 // touching the underlying t.termConfirmed strings, which are also used lowercase elsewhere.
-function StatusSelect({ value, onChange, t }) {
+function StatusSelect({ value, onChange, label, t }) {
   return (
     <select
       value={value}
       onChange={onChange}
-      className={`capitalize shrink-0 text-[10.5px] font-mono border px-1 py-0.5 bg-zinc-950 outline-none ${
+      aria-label={`${t.vulnStatusLabel}: ${label}`}
+      className={`capitalize shrink-0 text-[11px] font-mono border px-1.5 py-1 bg-zinc-950 outline-none ${
         STATUS_CLS[value] || STATUS_CLS.untested
       }`}
     >
@@ -67,7 +68,7 @@ function ChainRow({ node, depth, filterStatus, onSetStatus, onOpenNode, t }) {
           onClick={onClick}
           onDoubleClick={onDoubleClick}
           title={t.vulnOpenMapHint}
-          className="flex-1 min-w-0 flex items-center gap-1 text-[11px] text-zinc-400 truncate text-left hover:text-emerald-300 transition-colors"
+          className="flex-1 min-w-0 flex items-center gap-1 text-[11.5px] text-zinc-300 truncate text-left hover:text-emerald-300 transition-colors"
         >
           {hasChildren ? (
             open ? (
@@ -84,6 +85,7 @@ function ChainRow({ node, depth, filterStatus, onSetStatus, onOpenNode, t }) {
           <StatusSelect
             value={node.status}
             onChange={(e) => onSetStatus(node.realId, e.target.value)}
+            label={node.label}
             t={t}
           />
         )}
@@ -136,7 +138,12 @@ function TechniqueRow({ node, chains, statusById, filterStatus, onSetStatus, onO
           {hasChain && (chainOpen ? <CaretDown size={9} /> : <CaretRight size={9} />)}
           <span className="truncate">{node.label}</span>
         </button>
-        <StatusSelect value={node.status} onChange={(e) => onSetStatus(node.id, e.target.value)} t={t} />
+        <StatusSelect
+          value={node.status}
+          onChange={(e) => onSetStatus(node.id, e.target.value)}
+          label={node.label}
+          t={t}
+        />
       </div>
       {chainOpen &&
         chainChildren.map((child) => (
@@ -175,33 +182,36 @@ export default function VulnCatalogPanel({ activeDomain, tree, chains, onSetStat
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="pb-2 shrink-0 space-y-1.5">
-        <p className="px-0.5 text-[11px] font-mono uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-          <ListChecks size={12} /> {t.supAdviceHeading}
-        </p>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="capitalize w-full bg-zinc-900/60 border border-white/[0.08] px-2 py-1.5 text-[11.5px]
-                     text-zinc-300 outline-none focus:border-emerald-500/50 transition-colors"
-        >
-          {FILTER_OPTIONS.map((v) => (
-            <option key={v} value={v}>
-              {filterLabel(v, t)}
-            </option>
-          ))}
-        </select>
+        <h2 className="px-0.5 text-[11px] font-mono uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+          <ListChecks size={12} /> {t.vulnCatalogHeading}
+        </h2>
+        <label className="block">
+          <span className="sr-only">{t.vulnFilterAll}</span>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="capitalize w-full bg-zinc-900/60 border border-white/[0.08] px-2 py-1.5 text-[11.5px]
+                       text-zinc-300 outline-none focus:border-emerald-500/50 transition-colors"
+          >
+            {FILTER_OPTIONS.map((v) => (
+              <option key={v} value={v}>
+                {filterLabel(v, t)}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
         {!activeDomain ? (
-          <p className="text-[12px] text-zinc-600 px-0.5">{t.notebookEmpty}</p>
+          <p className="text-[12px] text-zinc-300 px-0.5">{t.notebookEmpty}</p>
         ) : categories.length === 0 && hasAnyTechniques ? (
-          <p className="text-[12px] text-zinc-600 px-0.5">{t.vulnFilterEmpty}</p>
+          <p className="text-[12px] text-zinc-300 px-0.5">{t.vulnFilterEmpty}</p>
         ) : (
           categories.map((cat) => (
             <div key={cat.id} className="mb-3">
-              <p className="text-[10.5px] font-mono uppercase tracking-wider text-zinc-600 mb-1 px-0.5">
+              <h3 className="text-[11px] font-mono uppercase tracking-wider text-zinc-300 mb-1 px-0.5">
                 {cat.label}
-              </p>
+              </h3>
               <div className="space-y-1">
                 {cat.children.map((node) => (
                   <TechniqueRow

@@ -93,12 +93,13 @@ export const getMemory = (target = "") =>
 // Never calls an AI provider and never touches the target itself — it hands a ranked
 // strategy + skill(s) to whichever coding agent (e.g. Claude Code) the operator drives.
 // -> { domain, archetype, plan: [{order, action, reasoning, taxonomy_ref}], skills, context_block }
-export const advise = ({ domain, question, mode = "blackbox", projectPath } = {}) =>
+export const advise = ({ domain, question, mode = "blackbox", projectPath, scanMode = "standard" } = {}) =>
   send("POST", "/supervisor/advise", {
     domain,
     question,
     mode,
     project_path: projectPath || undefined,
+    scan_mode: scanMode,
   });
 // Shared category -> technique tree (the same vocabulary the notebook and skills use).
 export const getTaxonomy = () => get("/taxonomy"); // -> { tree: [{id, label, children}] }
@@ -110,6 +111,8 @@ export const getNotebook = (domain) => get(`/notebook/${encodeURIComponent(domai
 // Taxonomy tree merged with this domain's per-node confirmed/unconfirmed/untested status
 // (plus in_progress/justification, and a synthetic "others" category for custom findings).
 export const getNotebookTree = (domain) => get(`/notebook/${encodeURIComponent(domain)}/tree`);
+// SARIF 2.1.0 export of a domain's confirmed/unconfirmed findings, for CI code-scanning upload.
+export const notebookSarif = (domain) => get(`/notebook/${encodeURIComponent(domain)}/sarif`);
 export const updateNotebookNode = (domain, nodeId, status, extra = {}) =>
   send("PATCH", `/notebook/${encodeURIComponent(domain)}`, { node_id: nodeId, status, ...extra });
 // Manually flag a node as "being tested right now" (normally set automatically by advise()).

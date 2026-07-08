@@ -52,8 +52,9 @@ API routes (with or without the ``/api`` prefix):
 
     -- Expert Supervisor + Hermes notebook (the default advisory flow; never calls an AI
        provider or executes anything against a target) --
-    POST  /supervisor/advise   body: {domain, question, mode?, project_path?}
+    POST  /supervisor/advise   body: {domain, question, mode?, project_path?, scan_mode?}
                                       -> 200 {domain, archetype, plan, skills, context_block}
+                                      (scan_mode: quick|standard|deep, default standard)
     GET   /taxonomy            -> 200 {tree}                       (shared category->technique tree)
     GET   /archetypes          -> 200 {archetypes}                 (seeded + user-saved heuristics)
     GET   /notebooks           -> 200 {notebooks}                  (flat domain summaries)
@@ -62,6 +63,9 @@ API routes (with or without the ``/api`` prefix):
     GET   /notebook/{domain}/tree     -> 200 {domain, tree}        (taxonomy + per-node status,
                                                                      incl. a synthetic "others"
                                                                      category for custom findings)
+    GET   /notebook/{domain}/sarif    -> 200 <SARIF 2.1.0 JSON>    (confirmed/unconfirmed nodes
+                                                                     as code-scanning results,
+                                                                     for CI upload)
     PATCH /notebook/{domain}          body: {node_id, status, note?, finding?} -> 200 <Notebook>
                                        body: {node_id, in_progress: true}      -> 200 <Notebook>
                                                                      (manual "testing this now"
@@ -272,6 +276,7 @@ def make_handler(
                         question=b.get("question", ""),
                         mode=b.get("mode", "blackbox"),
                         project_path=b.get("project_path"),
+                        scan_mode=b.get("scan_mode", "standard"),
                     )
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
@@ -561,6 +566,9 @@ def make_handler(
             if path.startswith("/notebook/") and path.endswith("/tree"):
                 domain = unquote(path[len("/notebook/") : -len("/tree")].rstrip("/"))
                 return self._send(200, service.get_notebook_tree(domain))
+            if path.startswith("/notebook/") and path.endswith("/sarif"):
+                domain = unquote(path[len("/notebook/") : -len("/sarif")].rstrip("/"))
+                return self._send(200, service.notebook_sarif(domain))
             if path.startswith("/notebook/"):
                 domain = unquote(path.removeprefix("/notebook/"))
                 return self._send(200, service.get_notebook(domain))

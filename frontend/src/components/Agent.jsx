@@ -13,6 +13,7 @@ import {
   getNotebookTree,
   getNotebookTreeRoots,
   ingestNotebookOutput,
+  notebookSarif,
   updateNotebookNode,
 } from "../lib/api";
 
@@ -31,6 +32,7 @@ export default function Agent({ t }) {
   const [chains, setChains] = useState([]);
 
   const [question, setQuestion] = useState("");
+  const [scanMode, setScanMode] = useState("standard"); // "quick" | "standard" | "deep"
   const [advice, setAdvice] = useState(null);
   const [adviceErr, setAdviceErr] = useState("");
   const [asking, setAsking] = useState(false);
@@ -148,7 +150,12 @@ export default function Agent({ t }) {
     setAsking(true);
     setAdviceErr("");
     try {
-      const result = await advise({ domain: activeDomain, question: question.trim(), mode: "blackbox" });
+      const result = await advise({
+        domain: activeDomain,
+        question: question.trim(),
+        mode: "blackbox",
+        scanMode,
+      });
       setAdvice(result);
       refreshActiveDomain();
     } catch (e) {
@@ -156,7 +163,7 @@ export default function Agent({ t }) {
     } finally {
       setAsking(false);
     }
-  }, [activeDomain, question, refreshActiveDomain]);
+  }, [activeDomain, question, scanMode, refreshActiveDomain]);
 
   const onIngest = useCallback(async () => {
     if (!activeDomain || !ingestText.trim()) return;
@@ -174,21 +181,53 @@ export default function Agent({ t }) {
     }
   }, [activeDomain, ingestText, refreshActiveDomain]);
 
+  // Export this domain's confirmed/unconfirmed findings as a SARIF 2.1.0 file (CI upload).
+  const onExportSarif = useCallback(async () => {
+    if (!activeDomain) return;
+    try {
+      const doc = await notebookSarif(activeDomain);
+      const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${activeDomain}.sarif.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setIngestErr(String(e.message || e));
+    }
+  }, [activeDomain]);
+
   return (
     <div className="page-enter agent-page-shell w-full px-3 sm:px-4 lg:px-6 py-4 flex flex-col">
-      {/* Single run / Continuous toggle — Continuous is a locked placeholder, not a dead route. */}
-      <div className="shrink-0 mb-3 flex gap-1.5">
+      {/* Visually hidden — gives screen-reader users a page landmark heading to jump to;
+          the visible chrome (TopNav's "Agent" link + this page's own labels) already
+          communicates the same thing sighted users see. */}
+      <h1 className="sr-only">{t.supHeading}</h1>
+
+      {/* Single run / Continuous toggle — Continuous is a locked placeholder, not a dead
+          route. Real tab semantics so assistive tech announces it as a 2-way switch, not
+          two unrelated buttons. */}
+      <div
+        role="tablist"
+        aria-label={t.agentViewModeLabel}
+        className="shrink-0 mb-3 flex gap-1.5"
+      >
         {[
           { id: "single", label: t.agentModeSingle },
           { id: "continuous", label: `${t.agentModeContinuous} · ${t.agentModeLocked}` },
         ].map((m) => (
           <button
             key={m.id}
+            role="tab"
+            aria-selected={agentMode === m.id}
             onClick={() => setAgentMode(m.id)}
             className={`px-3 py-1.5 text-[12.5px] font-medium border transition-colors ${
               agentMode === m.id
                 ? "bg-zinc-800 text-emerald-400 border-emerald-500/30"
-                : "text-zinc-500 border-white/[0.07] hover:text-zinc-200"
+                : "text-zinc-300 border-white/[0.07] hover:text-zinc-100"
             }`}
           >
             {m.label}
@@ -199,8 +238,11 @@ export default function Agent({ t }) {
       {/* Three columns filling the full width: targets -> that target's vuln catalog -> the
           supervisor panel (which absorbs whatever width is left on wide screens). Stacks
           vertically below `lg`. */}
-      <div className="flex flex-col lg:flex-row gap-3 lg:flex-1 lg:min-h-0">
-        <aside className="lg:w-[240px] shrink-0 flex flex-col min-h-0 lg:max-h-full">
+      <main
+        aria-label={t.supHeading}
+        className="flex flex-col lg:flex-row gap-3 lg:flex-1 lg:min-h-0"
+      >
+        <aside aria-label={t.notebookHeading} className="lg:w-[240px] shrink-0 flex flex-col min-h-0 lg:max-h-full">
           <NotebookSidebar
             roots={roots}
             activeDomain={activeDomain}
@@ -213,7 +255,7 @@ export default function Agent({ t }) {
           />
         </aside>
 
-        <aside className="lg:w-[300px] shrink-0 flex flex-col min-h-0 lg:max-h-full">
+        <aside aria-label={t.vulnCatalogHeading} className="lg:w-[300px] shrink-0 flex flex-col min-h-0 lg:max-h-full">
           <VulnCatalogPanel
             activeDomain={activeDomain}
             tree={tree}
@@ -229,6 +271,9 @@ export default function Agent({ t }) {
             activeDomain={activeDomain}
             question={question}
             setQuestion={setQuestion}
+            scanMode={scanMode}
+            setScanMode={setScanMode}
+            onExportSarif={onExportSarif}
             onAsk={onAsk}
             asking={asking}
             advice={advice}
@@ -246,7 +291,7 @@ export default function Agent({ t }) {
             <ContinuousLockedPanel t={t} />
           </div>
         )}
-      </div>
+      </main>
 
       {mindMapOpen && (
         <MindMap

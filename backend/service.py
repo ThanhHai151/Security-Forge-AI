@@ -44,6 +44,7 @@ from ai_framework.notes.contracts import Finding, Severity
 from ai_framework.notes.remediation import Remediator
 from ai_framework.notes.report import render_json, render_markdown
 from ai_framework.notes.store import JsonlFindingStore
+from ai_framework.report.sarif import notebook_to_sarif
 from ai_framework.research.archetype import ArchetypeStore
 from ai_framework.router.accounts import AccountStore
 from ai_framework.router.usage import UsageStore
@@ -201,9 +202,20 @@ class RunService:
     # ── Expert Supervisor + Hermes notebook (the new advisory flow) ──────────────────
 
     def advise(
-        self, domain: str, question: str, mode: str = "blackbox", project_path: str | None = None
+        self,
+        domain: str,
+        question: str,
+        mode: str = "blackbox",
+        project_path: str | None = None,
+        scan_mode: str = "standard",
     ) -> dict:
-        ctx = SessionContext(domain=domain, question=question, mode=mode, project_path=project_path)
+        ctx = SessionContext(
+            domain=domain,
+            question=question,
+            mode=mode,
+            project_path=project_path,
+            scan_mode=scan_mode,
+        )
         return self.supervisor.advise(ctx).model_dump(mode="json")
 
     def get_taxonomy_tree(self) -> list[dict]:
@@ -220,6 +232,12 @@ class RunService:
 
     def get_notebook_tree(self, domain: str) -> dict:
         return {"domain": domain, "tree": self.supervisor.notebooks.tree_view(domain)}
+
+    def notebook_sarif(self, domain: str) -> dict:
+        """Export a domain's confirmed/unconfirmed findings as a SARIF 2.1.0 document for CI
+        upload (GitHub code scanning, etc.). Deterministic — no AI call, no target access."""
+        notebook = self.supervisor.notebooks.get_or_create(domain)
+        return notebook_to_sarif(notebook, taxonomy=self._taxonomy)
 
     def update_notebook_node(
         self,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   CaretLeft,
   CircleNotch,
+  DownloadSimple,
   ListChecks,
   MagnifyingGlass,
   PaperPlaneRight,
@@ -11,7 +12,7 @@ import {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1">
+      <span className="block text-[11px] font-mono uppercase tracking-wider text-zinc-300 mb-1">
         {label}
       </span>
       {children}
@@ -21,21 +22,30 @@ function Field({ label, children }) {
 
 const inputCls =
   "w-full bg-zinc-900/60 border border-white/[0.08] px-3 py-2 text-[13px] text-zinc-100 " +
-  "placeholder:text-zinc-600 focus:border-emerald-500/50 outline-none transition-colors";
+  "placeholder:text-zinc-400 focus:border-emerald-500/50 outline-none transition-colors";
 
-function DrawerTab({ label, icon, active, onClick }) {
+// Icon + short text label, not an icon alone — the two things this button set gates (asking
+// the Supervisor a question, and reading its plan) are the whole point of this page, so they
+// need to be self-explanatory at a glance, not just discoverable via a tooltip. `aria-expanded`
+// + `aria-controls` describe the disclosure relationship to the drawer it opens.
+function DrawerTab({ label, shortLabel, icon, active, controls, onClick }) {
   return (
     <button
       onClick={onClick}
-      title={label}
       aria-label={label}
-      className={`w-9 h-9 flex items-center justify-center border transition-colors ${
+      title={label}
+      aria-expanded={active}
+      aria-controls={controls}
+      className={`flex flex-col items-center justify-center gap-1 min-w-[52px] px-1.5 py-2 border transition-colors ${
         active
           ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-          : "border-white/[0.08] text-zinc-500 hover:text-zinc-200"
+          : "border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.18]"
       }`}
     >
       {icon}
+      <span className="text-[9.5px] font-semibold uppercase tracking-wide leading-none">
+        {shortLabel}
+      </span>
     </button>
   );
 }
@@ -48,11 +58,17 @@ function DrawerTab({ label, icon, active, onClick }) {
 // mechanically parsed for CONFIRMED/NEW_FINDING_TYPE markers, see
 // ai_framework/supervisor/ingest.py); "Expert Supervisor" (ask a question) and
 // "Investigation strategy" (its answer) live in two collapsible drawers off the right edge
-// so they don't compete with the Terminal for space when not in use.
+// so they don't compete with the Terminal for space when not in use. A labeled onboarding
+// block above the paste area (instead of a bare placeholder in an otherwise-empty box) and a
+// direct "Ask" shortcut from it are what make the primary action discoverable without opening
+// a drawer first.
 export default function SupervisorPanel({
   activeDomain,
   question,
   setQuestion,
+  scanMode,
+  setScanMode,
+  onExportSarif,
   onAsk,
   asking,
   advice,
@@ -68,29 +84,58 @@ export default function SupervisorPanel({
   const [openDrawer, setOpenDrawer] = useState(null); // null | "supervisor" | "strategy"
   const canAsk = Boolean(activeDomain) && question.trim() && !asking;
   const toggleDrawer = (name) => setOpenDrawer((cur) => (cur === name ? null : name));
+  const showOnboarding = !ingestText.trim() && !ingestResult;
+  const scanModes = [
+    { id: "quick", label: t.supScanQuick },
+    { id: "standard", label: t.supScanStandard },
+    { id: "deep", label: t.supScanDeep },
+  ];
 
   return (
     <div className="flex-1 min-w-0 flex lg:min-h-0 relative">
       <div className="flex-1 min-w-0 flex flex-col border border-white/[0.07] bg-zinc-900/30 lg:min-h-0">
-        <div className="px-3 py-2 border-b border-white/[0.06] flex items-center gap-1.5 text-[12px] font-semibold text-zinc-200 shrink-0">
-          <TerminalWindow size={13} className="text-emerald-400" weight="bold" /> {t.supTerminalHeading}
+        <div className="px-3 py-2 border-b border-white/[0.06] flex items-center gap-1.5 shrink-0">
+          <TerminalWindow size={13} className="text-emerald-400" weight="bold" />
+          <h2 className="text-[12px] font-semibold text-zinc-100">{t.supTerminalHeading}</h2>
         </div>
         <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
-          <p className="text-[11.5px] text-zinc-500 shrink-0">{t.supCliEmpty}</p>
-          <textarea
-            value={ingestText}
-            onChange={(e) => setIngestText(e.target.value)}
-            placeholder={t.supIngestPlaceholder}
-            className={`${inputCls} flex-1 min-h-0 resize-none font-mono text-[12px]`}
-          />
-          <div className="shrink-0 flex items-center gap-2">
+          {showOnboarding && (
+            <div className="shrink-0 border border-dashed border-white/[0.12] bg-white/[0.02] px-3 py-2.5 flex items-start gap-2.5">
+              <TerminalWindow size={16} className="text-emerald-400 mt-0.5 shrink-0" weight="bold" />
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-medium text-zinc-100">{t.supTerminalEmptyTitle}</p>
+                <p className="text-[11.5px] text-zinc-300 mt-0.5 leading-snug">{t.supCliEmpty}</p>
+                {activeDomain && !advice && (
+                  <button
+                    onClick={() => toggleDrawer("supervisor")}
+                    className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11.5px] font-medium bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
+                  >
+                    <MagnifyingGlass size={12} weight="bold" /> {t.supAsk}
+                  </button>
+                )}
+                {!activeDomain && (
+                  <p className="text-[11.5px] text-zinc-300 mt-1.5">{t.notebookEmpty}</p>
+                )}
+              </div>
+            </div>
+          )}
+          <label className="flex-1 min-h-0 flex flex-col">
+            <span className="sr-only">{t.supIngestPlaceholder}</span>
+            <textarea
+              value={ingestText}
+              onChange={(e) => setIngestText(e.target.value)}
+              placeholder={t.supIngestPlaceholder}
+              className={`${inputCls} flex-1 min-h-0 resize-none font-mono text-[12px]`}
+            />
+          </label>
+          <div className="shrink-0 flex items-center gap-2 flex-wrap">
             <button
               onClick={onIngest}
               disabled={!activeDomain || !ingestText.trim() || ingesting}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium transition-colors ${
                 activeDomain && ingestText.trim() && !ingesting
                   ? "bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25"
-                  : "border border-white/[0.07] text-zinc-600 cursor-not-allowed"
+                  : "border border-white/[0.07] text-zinc-500 cursor-not-allowed"
               }`}
             >
               {ingesting ? (
@@ -99,6 +144,19 @@ export default function SupervisorPanel({
                 <PaperPlaneRight size={13} weight="bold" />
               )}
               {t.supIngest}
+            </button>
+            <button
+              onClick={onExportSarif}
+              disabled={!activeDomain}
+              title={t.supExportSarif}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border transition-colors ${
+                activeDomain
+                  ? "border-white/[0.12] text-zinc-300 hover:text-emerald-400 hover:border-emerald-500/25"
+                  : "border-white/[0.07] text-zinc-500 cursor-not-allowed"
+              }`}
+            >
+              <DownloadSimple size={13} weight="bold" />
+              {t.supExportSarif}
             </button>
             {ingestResult && (
               <p className="text-[11.5px] text-emerald-400/90">
@@ -114,25 +172,36 @@ export default function SupervisorPanel({
       <div className="shrink-0 flex flex-col gap-1.5 ml-1.5">
         <DrawerTab
           label={t.supHeading}
-          icon={<MagnifyingGlass size={14} weight="bold" />}
+          shortLabel={t.supAskShort}
+          icon={<MagnifyingGlass size={15} weight="bold" />}
           active={openDrawer === "supervisor"}
+          controls="sup-ask-drawer"
           onClick={() => toggleDrawer("supervisor")}
         />
         <DrawerTab
           label={t.supAdviceHeading}
-          icon={<ListChecks size={14} weight="bold" />}
+          shortLabel={t.supPlanShort}
+          icon={<ListChecks size={15} weight="bold" />}
           active={openDrawer === "strategy"}
+          controls="sup-plan-drawer"
           onClick={() => toggleDrawer("strategy")}
         />
       </div>
 
       {openDrawer === "supervisor" && (
-        <div className="absolute top-0 right-[42px] w-[320px] h-full border border-white/[0.1] bg-zinc-950 z-10 flex flex-col shadow-2xl">
+        <div
+          id="sup-ask-drawer"
+          className="absolute top-0 right-[58px] w-[320px] h-full border border-white/[0.1] bg-zinc-950 z-10 flex flex-col shadow-2xl"
+        >
           <div className="px-3 py-2 border-b border-white/[0.06] flex items-center justify-between shrink-0">
-            <span className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-200">
+            <h2 className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-100">
               <MagnifyingGlass size={13} className="text-emerald-400" weight="bold" /> {t.supHeading}
-            </span>
-            <button onClick={() => setOpenDrawer(null)} className="text-zinc-500 hover:text-zinc-200">
+            </h2>
+            <button
+              onClick={() => setOpenDrawer(null)}
+              aria-label={t.chainClose}
+              className="text-zinc-300 hover:text-zinc-100"
+            >
               <CaretLeft size={13} />
             </button>
           </div>
@@ -146,49 +215,78 @@ export default function SupervisorPanel({
                 className={`${inputCls} resize-none`}
               />
             </Field>
+            <div>
+              <span className="block text-[11px] font-mono uppercase tracking-wider text-zinc-300 mb-1">
+                {t.supScanMode}
+              </span>
+              <div role="radiogroup" aria-label={t.supScanMode} className="flex gap-1">
+                {scanModes.map((m) => (
+                  <button
+                    key={m.id}
+                    role="radio"
+                    aria-checked={scanMode === m.id}
+                    onClick={() => setScanMode(m.id)}
+                    className={`flex-1 px-2 py-1.5 text-[11.5px] font-medium border transition-colors ${
+                      scanMode === m.id
+                        ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                        : "border-white/[0.08] text-zinc-300 hover:text-zinc-100"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               onClick={onAsk}
               disabled={!canAsk}
               className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-[12.5px] font-semibold transition-colors ${
                 canAsk
                   ? "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
-                  : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
               }`}
             >
               {asking && <CircleNotch size={14} className="animate-spin" />}
               {asking ? t.supAsking : t.supAsk}
             </button>
-            {!activeDomain && <p className="text-[11.5px] text-zinc-600">{t.notebookEmpty}</p>}
+            {!activeDomain && <p className="text-[11.5px] text-zinc-300">{t.notebookEmpty}</p>}
             {adviceErr && <p className="text-[12px] text-red-400/90">{adviceErr}</p>}
           </div>
         </div>
       )}
 
       {openDrawer === "strategy" && (
-        <div className="absolute top-0 right-[42px] w-[320px] h-full border border-white/[0.1] bg-zinc-950 z-10 flex flex-col shadow-2xl">
+        <div
+          id="sup-plan-drawer"
+          className="absolute top-0 right-[58px] w-[320px] h-full border border-white/[0.1] bg-zinc-950 z-10 flex flex-col shadow-2xl"
+        >
           <div className="px-3 py-2 border-b border-white/[0.06] flex items-center justify-between shrink-0">
-            <span className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-200">
+            <h2 className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-100">
               <ListChecks size={13} className="text-emerald-400" weight="bold" /> {t.supAdviceHeading}
-            </span>
-            <button onClick={() => setOpenDrawer(null)} className="text-zinc-500 hover:text-zinc-200">
+            </h2>
+            <button
+              onClick={() => setOpenDrawer(null)}
+              aria-label={t.chainClose}
+              className="text-zinc-300 hover:text-zinc-100"
+            >
               <CaretLeft size={13} />
             </button>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
             {!advice ? (
-              <p className="text-[12px] text-zinc-500">{t.supAdviceEmpty}</p>
+              <p className="text-[12px] text-zinc-300">{t.supAdviceEmpty}</p>
             ) : (
               <>
                 {advice.archetype && (
-                  <p className="text-[11.5px] font-mono text-zinc-500">
+                  <p className="text-[11.5px] font-mono text-zinc-300">
                     {t.supArchetype}: <span className="text-emerald-400/90">{advice.archetype}</span>
                   </p>
                 )}
                 <ol className="space-y-2 list-decimal list-inside">
                   {advice.plan.map((step) => (
-                    <li key={step.order} className="text-[12.5px] text-zinc-200">
+                    <li key={step.order} className="text-[12.5px] text-zinc-100">
                       <span className="font-medium">{step.action}</span>
-                      <p className="ml-4 text-[11.5px] text-zinc-500 leading-snug">{step.reasoning}</p>
+                      <p className="ml-4 text-[12px] text-zinc-300 leading-snug">{step.reasoning}</p>
                     </li>
                   ))}
                 </ol>

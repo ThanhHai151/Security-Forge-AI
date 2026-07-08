@@ -55,7 +55,7 @@ class SupervisorService:
 
         context_block = assemble.render_context_block(
             plan, selected, self.skills, taxonomy=self.taxonomy, notebook=notebook,
-            archetype=archetype,
+            archetype=archetype, scan_mode=ctx.scan_mode, mode=ctx.mode,
         )
         return Advice(
             domain=ctx.domain,

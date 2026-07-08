@@ -12,6 +12,11 @@ class SessionContext(BaseModel):
     question: str
     mode: str = "blackbox"  # "whitebox" | "blackbox" — explicit choice, never auto-detected
     project_path: str | None = None  # required for "whitebox" ranking to do anything
+    # Depth posture, mirroring the reference tool's quick/standard/deep scan modes. Controls
+    # how many techniques the plan surfaces, whether the order is biased toward high-impact
+    # classes, and the methodology posture rendered into the briefing. Unknown values fall
+    # back to "standard" (see ``strategy.resolve_scan_mode``).
+    scan_mode: str = "standard"  # "quick" | "standard" | "deep"
 
 
 class SkillRef(BaseModel):
