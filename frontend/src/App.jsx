@@ -161,13 +161,13 @@ export default function App() {
 
       {section === "defense" && (
         <main className="pt-[64px]">
-          <Defense t={t} />
+          <Defense t={t} locale={locale} />
         </main>
       )}
 
       {section === "agent" && (
         <main className="pt-[64px]">
-          <Agent t={t} />
+          <Agent t={t} locale={locale} />
         </main>
       )}
 

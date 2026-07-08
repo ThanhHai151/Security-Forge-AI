@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
-import { ShieldCheck, CircleNotch, Warning, FileCode, Package } from "@phosphor-icons/react";
+import { ShieldCheck, CircleNotch, Warning, FileCode, Package, BookOpen } from "@phosphor-icons/react";
 
 import { scanDefense } from "../lib/api";
+import HelpModal from "./HelpModal";
 
 const inputCls =
   "w-full bg-zinc-900/60 border border-white/[0.08] px-3 py-2.5 text-[14px] text-zinc-100 " +
@@ -96,12 +97,13 @@ function DepCard({ d, t }) {
 
 const order = ["critical", "high", "medium", "low", "unknown"];
 
-export default function Defense({ t }) {
+export default function Defense({ t, locale = "en" }) {
   const [path, setPath] = useState("");
   const [depsOnline, setDepsOnline] = useState(false);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const run = useCallback(async () => {
     if (!path.trim()) return;
@@ -123,9 +125,17 @@ export default function Defense({ t }) {
   return (
     <div className="page-enter mx-auto max-w-[980px] px-5 sm:px-8 lg:px-12 py-10">
       <header className="pb-7">
-        <p className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-emerald-400/80">
-          <ShieldCheck size={15} weight="fill" /> {t.defKicker}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-emerald-400/80">
+            <ShieldCheck size={15} weight="fill" /> {t.defKicker}
+          </p>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium border border-white/[0.08] text-zinc-300 hover:text-emerald-400 hover:border-emerald-500/25 transition-colors"
+          >
+            <BookOpen size={14} weight="bold" /> {t.helpButton}
+          </button>
+        </div>
         <h1 className="mt-3 text-[2.1rem] sm:text-[2.6rem] font-bold text-zinc-50 tracking-tight leading-[1.08]">
           {t.defTitle}
         </h1>
@@ -236,6 +246,10 @@ export default function Defense({ t }) {
             </p>
           )}
         </div>
+      )}
+
+      {helpOpen && (
+        <HelpModal page="defense" locale={locale} title={t.helpButton} onClose={() => setHelpOpen(false)} />
       )}
     </div>
   );

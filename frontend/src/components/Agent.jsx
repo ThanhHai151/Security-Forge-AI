@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { BookOpen } from "@phosphor-icons/react";
 
 import ContinuousLockedPanel from "./ContinuousLockedPanel";
+import HelpModal from "./HelpModal";
 import MindMap from "./MindMap";
 import NotebookSidebar from "./NotebookSidebar";
 import SupervisorPanel from "./SupervisorPanel";
@@ -23,8 +25,9 @@ import {
 // pending a redesign — see ContinuousLockedPanel and backend/service.py's
 // AutonomousDisabledError. Red-team only: source-code review is Defense's job, not this
 // page's notebook.
-export default function Agent({ t }) {
+export default function Agent({ t, locale = "en" }) {
   const [agentMode, setAgentMode] = useState("single"); // "single" | "continuous" (locked)
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const [roots, setRoots] = useState([]);
   const [activeDomain, setActiveDomain] = useState("");
@@ -207,32 +210,36 @@ export default function Agent({ t }) {
           communicates the same thing sighted users see. */}
       <h1 className="sr-only">{t.supHeading}</h1>
 
-      {/* Single run / Continuous toggle — Continuous is a locked placeholder, not a dead
-          route. Real tab semantics so assistive tech announces it as a 2-way switch, not
-          two unrelated buttons. */}
-      <div
-        role="tablist"
-        aria-label={t.agentViewModeLabel}
-        className="shrink-0 mb-3 flex gap-1.5"
-      >
-        {[
-          { id: "single", label: t.agentModeSingle },
-          { id: "continuous", label: `${t.agentModeContinuous} · ${t.agentModeLocked}` },
-        ].map((m) => (
-          <button
-            key={m.id}
-            role="tab"
-            aria-selected={agentMode === m.id}
-            onClick={() => setAgentMode(m.id)}
-            className={`px-3 py-1.5 text-[12.5px] font-medium border transition-colors ${
-              agentMode === m.id
-                ? "bg-zinc-800 text-emerald-400 border-emerald-500/30"
-                : "text-zinc-300 border-white/[0.07] hover:text-zinc-100"
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
+      {/* Single run / Continuous toggle (Continuous is a locked placeholder, not a dead route)
+          on the left; the "How to use" instructions button on the right. Real tab semantics so
+          assistive tech announces the toggle as a 2-way switch, not two unrelated buttons. */}
+      <div className="shrink-0 mb-3 flex items-center gap-1.5">
+        <div role="tablist" aria-label={t.agentViewModeLabel} className="flex gap-1.5">
+          {[
+            { id: "single", label: t.agentModeSingle },
+            { id: "continuous", label: `${t.agentModeContinuous} · ${t.agentModeLocked}` },
+          ].map((m) => (
+            <button
+              key={m.id}
+              role="tab"
+              aria-selected={agentMode === m.id}
+              onClick={() => setAgentMode(m.id)}
+              className={`px-3 py-1.5 text-[12.5px] font-medium border transition-colors ${
+                agentMode === m.id
+                  ? "bg-zinc-800 text-emerald-400 border-emerald-500/30"
+                  : "text-zinc-300 border-white/[0.07] hover:text-zinc-100"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setHelpOpen(true)}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium border border-white/[0.08] text-zinc-300 hover:text-emerald-400 hover:border-emerald-500/25 transition-colors"
+        >
+          <BookOpen size={14} weight="bold" /> {t.helpButton}
+        </button>
       </div>
 
       {/* Three columns filling the full width: targets -> that target's vuln catalog -> the
@@ -292,6 +299,10 @@ export default function Agent({ t }) {
           </div>
         )}
       </main>
+
+      {helpOpen && (
+        <HelpModal page="agent" locale={locale} title={t.helpButton} onClose={() => setHelpOpen(false)} />
+      )}
 
       {mindMapOpen && (
         <MindMap
