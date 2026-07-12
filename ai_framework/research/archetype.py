@@ -34,6 +34,35 @@ class ArchetypeHeuristic(BaseModel):
 # (ai_framework.taxonomy.tree.Taxonomy) so the supervisor can boost them directly.
 SEED_ARCHETYPES: tuple[ArchetypeHeuristic, ...] = (
     ArchetypeHeuristic(
+        archetype="multi-user-data-management",
+        label="Multi-user data management",
+        keywords=(
+            "data management", "record management", "multi-user", "many users", "crm",
+            "erp", "case management", "document management", "quản lý dữ liệu",
+            "quản lý hồ sơ", "nhiều người dùng",
+        ),
+        priority_nodes=(
+            "broken_access_control", "broken_authentication", "sql_injection",
+            "information_disclosure",
+        ),
+        rationale="many users share structured records -> tenant/object authorization, role "
+        "boundaries, query injection, and accidental record disclosure deserve early tests",
+    ),
+    ArchetypeHeuristic(
+        archetype="social-network",
+        label="Social network / community",
+        keywords=(
+            "social network", "social media", "community platform", "user profile", "news feed",
+            "friend request", "followers", "avatar", "mạng xã hội", "hồ sơ người dùng",
+            "bảng tin", "kết bạn", "người theo dõi",
+        ),
+        priority_nodes=(
+            "file_upload", "broken_access_control", "xss", "race_condition", "oauth",
+        ),
+        rationale="user-generated media, cross-user objects, rich posts, concurrent social "
+        "actions, and federated login create upload, IDOR, XSS, race, and OAuth branches",
+    ),
+    ArchetypeHeuristic(
         archetype="hr-employee-management",
         label="HR / employee management",
         keywords=(
@@ -69,6 +98,19 @@ SEED_ARCHETYPES: tuple[ArchetypeHeuristic, ...] = (
         priority_nodes=("api_security", "broken_access_control", "graphql"),
         rationale="no UI to guide testing -> authorization and schema/introspection issues "
         "dominate",
+    ),
+    ArchetypeHeuristic(
+        archetype="financial-transactional",
+        label="Financial / transactional",
+        keywords=(
+            "banking", "wallet", "transfer", "payment platform", "ledger", "fintech",
+            "ngân hàng", "ví điện tử", "chuyển tiền", "giao dịch",
+        ),
+        priority_nodes=(
+            "broken_access_control", "race_condition", "broken_authentication", "api_security",
+        ),
+        rationale="money-moving state transitions demand strict object authorization, replay "
+        "resistance, concurrency controls, and hardened authentication/API boundaries",
     ),
 )
 

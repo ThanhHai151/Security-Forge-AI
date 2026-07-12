@@ -122,6 +122,13 @@ def test_check_endpoint_rejects_empty_base_url():
     assert r["ok"] is False and r["status"] == 0
 
 
+def test_check_endpoint_rejects_cloud_metadata_destination_without_network():
+    r = check_endpoint("http://169.254.169.254/latest", "k")
+    assert r["ok"] is False
+    assert r["reason"] == "config"
+    assert "metadata" in r["error"]
+
+
 def test_check_endpoint_flags_401_as_auth_failure():
     r = check_endpoint("https://x/v1", "bad", http_post=lambda *a: (401, "invalid api key"))
     assert r["ok"] is False
@@ -333,14 +340,17 @@ def test_usage_reset_route_is_ok(api):
     assert status == 200 and body == {"ok": True}
 
 
-def test_export_masks_keys_by_default_and_includes_them_on_request(api):
+def test_export_masks_keys_and_refuses_secret_export(api):
     _post(f"{api}/accounts", {"label": "oai", "base_url": "https://x/v1", "api_key": "sk-secret"})
 
     _, masked = _get(f"{api}/accounts/export")
     assert masked["accounts"][0]["api_key"] == ""  # scrubbed unless asked
 
-    _, full = _get(f"{api}/accounts/export?include_keys=1")
-    assert full["accounts"][0]["api_key"] == "sk-secret"
+    import urllib.error
+
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        _get(f"{api}/accounts/export?include_keys=1")
+    assert exc.value.code == 403
 
 
 def test_import_adds_new_accounts_and_dedupes_on_repeat(api):

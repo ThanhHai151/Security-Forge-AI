@@ -6,8 +6,8 @@ against a domain. Each **phase** is a ``run_loop`` that inherits everything the 
 learned (persistent per-target memory already suppresses repeats), carries the last plan
 forward, and pushes coverage deeper + wider. Between phases the campaign pauses
 (``awaiting_user``) so the operator decides whether to continue — matching the brief's
-"ask each time" model — and it flips to ``hardened`` when consecutive phases stop finding new
-surface (the target looks well-protected).
+"ask each time" model — and records ``no_new_findings_within_budget`` when consecutive phases
+stop producing new evidence. That outcome never claims the target is hardened or secure.
 
 Design borrowed from CAI's continuous-ops: a task/coverage list that marks what was tried vs.
 untried so plans never repeat old work (``task_queue.py``), a rolling carry-over summary
@@ -30,6 +30,8 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from ai_framework.agent.contracts import Run, ToolCall
+from ai_framework.harness.contracts import RulesOfEngagement
+from ai_framework.security.redaction import redact_data
 
 
 def _now() -> datetime:
@@ -92,7 +94,8 @@ class ApprovalStatus(StrEnum):
 class CampaignStatus(StrEnum):
     running = "running"            # a phase is executing
     awaiting_user = "awaiting_user"  # phase done; waiting for continue/stop
-    hardened = "hardened"          # no new surface for N phases — likely well-protected
+    no_new_findings = "no_new_findings_within_budget"
+    hardened = "hardened"          # legacy persisted value; never emitted by new campaigns
     completed = "completed"        # autopilot ran its full phase budget and stopped on its own
     stopped = "stopped"            # operator ended it
     error = "error"
@@ -128,10 +131,11 @@ class CampaignConfig(BaseModel):
     model: str | None = None
     base_url: str | None = None
     authorized_targets: set[str] = Field(default_factory=set)
+    rules_of_engagement: RulesOfEngagement | None = None
     phase_step_budget: int = 8
     # Autopilot: chain phases back-to-back with no operator pause, so a single request drives
     # the whole engagement to a stop condition. ``max_phases`` bounds it (budget + safety);
-    # the campaign flips to ``hardened`` (target looks protected) or ``completed`` (budget spent)
+    # the campaign records no-new-findings or ``completed`` (budget spent)
     # on its own. ``auto_approve_mutating`` additionally lets state-changing actions run without
     # being held for approval — full independent execution, still behind the authorized-scope gate.
     autopilot: bool = False
@@ -313,7 +317,8 @@ class CampaignStore:
     def save(self, campaign: Campaign) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
         tmp = self._path(campaign.id).with_suffix(".json.tmp")
-        tmp.write_text(campaign.model_dump_json(), encoding="utf-8")
+        data = redact_data(campaign.model_dump(mode="json"))
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self._path(campaign.id))
 
     def load(self, campaign_id: str) -> Campaign | None:

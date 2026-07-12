@@ -27,8 +27,9 @@ agent's working knowledge.
 ## `archetype.py`
 
 Deterministic (no AI-provider call) app-archetype classification: keyword-matches a
-domain/question against a small seeded set (`SEED_ARCHETYPES`) of app kinds (HR/employee
-management, e-commerce, CMS, API-only backend), each carrying `priority_nodes` — taxonomy
+domain/question against a small seeded set (`SEED_ARCHETYPES`) of app kinds (multi-user data
+management, social network, HR/employee management, e-commerce, CMS, API-only backend, and
+financial/transactional), each carrying ordered `priority_nodes` — taxonomy
 technique ids (`../taxonomy/tree.py`) to boost for that kind of app. This is the mechanism
 behind "two HR-style targets both get weak-password testing prioritized" without ever
 sharing a specific finding between the two domains — only the generic heuristic transfers,

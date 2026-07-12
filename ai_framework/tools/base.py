@@ -11,9 +11,10 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ai_framework.agent.contracts import ToolCall, ToolResult
+from ai_framework.harness.contracts import RulesOfEngagement
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -29,7 +30,16 @@ class ToolContext(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    authorized_targets: set[str] = set()
+    authorized_targets: set[str] = Field(default_factory=set)
+    # When set, this exact operator-owned RoE is enforced in ``ToolRegistry.execute`` in
+    # addition to the legacy host allow-list below. ``primary_target`` supplies scope context to
+    # local credential-setup tools, which do not otherwise carry a URL argument.
+    rules_of_engagement: RulesOfEngagement | None = None
+    primary_target: str = ""
+    approved_action_tokens: set[str] = Field(default_factory=set)
+    limiter: Any = None  # EngagementLimiter; optional to keep contexts easily injectable
+    audit: Any = None  # EvidenceLedger; records redacted tool decisions and outputs
+    run_id: str = ""
     session: Any = None  # HttpSession — persistent cookies / proxy / UA (see tools/session.py)
     runner: Any = None  # (argv, timeout) -> (rc, stdout, stderr); injected in tests
     renderer: Any = None  # (url, wait_ms) -> rendered HTML; injected in tests
@@ -42,6 +52,11 @@ def require_authorized(url: str, ctx: ToolContext) -> str:
     The single choke point every network tool goes through, so the scope gate can never be
     forgotten when a new tool is added (ARCHITECTURE.md › Safety).
     """
+    if ctx.rules_of_engagement is not None:
+        from ai_framework.harness.policy import target_is_in_scope
+
+        if not target_is_in_scope(url, ctx.rules_of_engagement):
+            raise PermissionError("target is excluded or outside the Rules of Engagement scope")
     return require_authorized_host(urlparse(url).hostname or "", ctx)
 
 
@@ -53,6 +68,12 @@ def require_authorized_host(host: str, ctx: ToolContext) -> str:
     enumeration of an authorized domain does not trip the gate.
     """
     host = (host or "").strip().lower()
+    if ctx.rules_of_engagement is not None:
+        from ai_framework.harness.policy import target_is_in_scope
+
+        if target_is_in_scope(host, ctx.rules_of_engagement):
+            return host
+        raise PermissionError("target is excluded or outside the Rules of Engagement scope")
     if host in LOCAL_HOSTS:
         return host
     for allowed in ctx.authorized_targets:
@@ -115,9 +136,27 @@ class ToolRegistry:
     def execute(self, call: ToolCall, ctx: ToolContext) -> ToolResult:
         tool = self._tools.get(call.name)
         if tool is None:
-            return ToolResult(call_id=call.id, log=f"unknown tool: {call.name}", ok=False)
+            result = ToolResult(call_id=call.id, log=f"unknown tool: {call.name}", ok=False)
+            if ctx.audit is not None:
+                ctx.audit.record_tool(call, result, ctx)
+            return result
+        acquired = False
         try:
+            # Runtime-enforce the optional professional Rules of Engagement before a tool can
+            # touch the target. This complements (rather than replaces) each tool's own scope
+            # gate, which is intentionally retained as defense in depth.
+            from ai_framework.harness.runtime import enforce_tool_policy
+
+            enforce_tool_policy(call, tool, ctx)
+            if ctx.limiter is not None:
+                acquired = bool(ctx.limiter.before(call, tool))
             log = tool.run(call.arguments, ctx)
-            return ToolResult(call_id=call.id, log=log, ok=True)
+            result = ToolResult(call_id=call.id, log=log, ok=True)
         except Exception as exc:  # noqa: BLE001 - degrade, don't crash the loop
-            return ToolResult(call_id=call.id, log=f"{type(exc).__name__}: {exc}", ok=False)
+            result = ToolResult(call_id=call.id, log=f"{type(exc).__name__}: {exc}", ok=False)
+        finally:
+            if ctx.limiter is not None:
+                ctx.limiter.after(acquired)
+        if ctx.audit is not None:
+            ctx.audit.record_tool(call, result, ctx)
+        return result

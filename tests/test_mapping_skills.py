@@ -1,6 +1,7 @@
 """Framework mapping completeness/attachment + operational skill manifests are well-formed."""
 
 
+from ai_framework.skills.loader import SkillRegistry
 from knowledge_base.index import KnowledgeBase, repo_root
 from vuln_search.catalog import load_catalog
 from vuln_search.mapping import FRAMEWORK_MAP, label, mapping_for
@@ -85,3 +86,26 @@ def test_core_operational_skills_present():
     names = {p.parent.name for p in SKILLS.glob("*/SKILL.md")}
     assert {"exploiting-xss", "exploiting-ssrf", "attacking-jwt", "exploiting-idor",
             "exploiting-command-injection"} <= names
+
+
+def test_every_catalog_vulnerability_has_exactly_one_reasoning_skill():
+    """The catalog link is the one-to-one routing key; aliases may not share a skill."""
+    registry = SkillRegistry(SKILLS)
+    by_slug: dict[str, list[str]] = {}
+    for skill in registry.skills():
+        slug = skill.catalog_slug()
+        if slug in _catalog_slugs():
+            by_slug.setdefault(slug, []).append(skill.name)
+    assert set(by_slug) == _catalog_slugs()
+    duplicates = {slug: names for slug, names in by_slug.items() if len(names) != 1}
+    assert not duplicates, f"expected exactly one skill per catalog vulnerability: {duplicates}"
+
+
+def test_every_vulnerability_skill_has_a_staged_question_chain():
+    registry = SkillRegistry(SKILLS)
+    for skill in registry.skills():
+        if skill.catalog_slug() not in _catalog_slugs():
+            continue
+        questions = registry.questions(skill.name)
+        assert len(questions) >= 4, f"{skill.name} needs a useful reasoning chain"
+        assert questions[0].stage in {"surface", "context"}

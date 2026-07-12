@@ -55,15 +55,15 @@ def test_campaign_chains_phases_and_hardens(tmp_path, mock_server):
     assert cov.get("recon") == "confirmed"
 
     # Chain further phases; with the offline stub nothing new surfaces, so it hardens.
-    hardened = False
+    exhausted = False
     for _ in range(4):
         assert svc.continue_campaign(cid)
         c = _await_phase(svc, cid)
         assert len(c["phase_runs"]) >= 2
-        if c["status"] == "hardened":
-            hardened = True
+        if c["status"] == "no_new_findings_within_budget":
+            exhausted = True
             break
-    assert hardened, "consecutive empty phases should mark the target hardened"
+    assert exhausted, "consecutive empty phases should record no new findings within budget"
 
     # Stop ends it, and continue is refused afterwards.
     assert svc.stop_campaign(cid)
@@ -73,7 +73,7 @@ def test_campaign_chains_phases_and_hardens(tmp_path, mock_server):
 
 def _await_terminal(svc: RunService, cid: str, timeout: float = 20.0) -> dict:
     """Block until an autopilot campaign reaches a self-stop state (no operator input)."""
-    terminal = {"hardened", "completed", "stopped", "error"}
+    terminal = {"no_new_findings_within_budget", "completed", "stopped", "error"}
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         c = svc.get_campaign(cid)
@@ -94,7 +94,7 @@ def test_autopilot_runs_to_completion_without_operator(tmp_path, mock_server):
 
     c = _await_terminal(svc, cid)
     # With the offline stub, consecutive empty phases harden the target — reached autonomously.
-    assert c["status"] in {"hardened", "completed"}
+    assert c["status"] in {"no_new_findings_within_budget", "completed"}
     assert 1 < len(c["phase_runs"]) <= 5  # it chained phases by itself, within the budget
     cov = {x["technique"]: x["status"] for x in c["coverage"]}
     assert cov.get("recon") == "confirmed"

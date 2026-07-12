@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
   CaretLeft,
+  Check,
   CircleNotch,
+  Copy,
   DownloadSimple,
   ListChecks,
   MagnifyingGlass,
@@ -68,6 +70,8 @@ export default function SupervisorPanel({
   setQuestion,
   scanMode,
   setScanMode,
+  harnessConfig,
+  setHarnessConfig,
   onExportSarif,
   onAsk,
   asking,
@@ -82,6 +86,7 @@ export default function SupervisorPanel({
   t,
 }) {
   const [openDrawer, setOpenDrawer] = useState(null); // null | "supervisor" | "strategy"
+  const [copied, setCopied] = useState(false);
   const canAsk = Boolean(activeDomain) && question.trim() && !asking;
   const toggleDrawer = (name) => setOpenDrawer((cur) => (cur === name ? null : name));
   const showOnboarding = !ingestText.trim() && !ingestResult;
@@ -90,6 +95,18 @@ export default function SupervisorPanel({
     { id: "standard", label: t.supScanStandard },
     { id: "deep", label: t.supScanDeep },
   ];
+  const updateHarness = (field, value) =>
+    setHarnessConfig((current) => ({ ...current, [field]: value }));
+  const copyHarness = async () => {
+    if (!advice?.context_block) return;
+    try {
+      await navigator.clipboard.writeText(advice.context_block);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div className="flex-1 min-w-0 flex lg:min-h-0 relative">
@@ -237,6 +254,85 @@ export default function SupervisorPanel({
                 ))}
               </div>
             </div>
+            <section className="border-t border-white/[0.07] pt-3 space-y-3">
+              <h3 className="text-[11px] font-mono uppercase tracking-wider text-zinc-300">
+                {t.supRoeHeading}
+              </h3>
+              <Field label={t.supVendor}>
+                <select
+                  value={harnessConfig.vendor}
+                  onChange={(e) => updateHarness("vendor", e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="generic">{t.supVendorGeneric}</option>
+                  <option value="claude-code">Claude Code</option>
+                  <option value="codex">OpenAI Codex</option>
+                  <option value="cursor">Cursor</option>
+                </select>
+              </Field>
+              <Field label={t.supCriticality}>
+                <select
+                  value={harnessConfig.assetCriticality}
+                  onChange={(e) => updateHarness("assetCriticality", e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="unknown">{t.supCriticalityUnknown}</option>
+                  <option value="critical">{t.supCriticalityCritical}</option>
+                  <option value="production">{t.supCriticalityProduction}</option>
+                  <option value="non-production">{t.supCriticalityNonProduction}</option>
+                </select>
+              </Field>
+              <Field label={t.supAuthorizationRef}>
+                <input
+                  value={harnessConfig.authorizationReference}
+                  onChange={(e) => updateHarness("authorizationReference", e.target.value)}
+                  placeholder={t.supAuthorizationRefPlaceholder}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label={t.supWindowStart}>
+                <input
+                  type="datetime-local"
+                  value={harnessConfig.windowStart}
+                  onChange={(e) => updateHarness("windowStart", e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label={t.supWindowEnd}>
+                <input
+                  type="datetime-local"
+                  value={harnessConfig.windowEnd}
+                  onChange={(e) => updateHarness("windowEnd", e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label={t.supExcludedTargets}>
+                <input
+                  value={harnessConfig.excludedTargets}
+                  onChange={(e) => updateHarness("excludedTargets", e.target.value)}
+                  placeholder={t.supExcludedTargetsPlaceholder}
+                  className={inputCls}
+                />
+              </Field>
+              <label className="flex items-start gap-2 text-[11.5px] text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={harnessConfig.allowSubdomains}
+                  onChange={(e) => updateHarness("allowSubdomains", e.target.checked)}
+                  className="mt-0.5 accent-emerald-500"
+                />
+                <span>{t.supAllowSubdomains}</span>
+              </label>
+              <label className="flex items-start gap-2 text-[11.5px] text-zinc-100">
+                <input
+                  type="checkbox"
+                  checked={harnessConfig.authorizationConfirmed}
+                  onChange={(e) => updateHarness("authorizationConfirmed", e.target.checked)}
+                  className="mt-0.5 accent-emerald-500"
+                />
+                <span>{t.supAuthorizationConfirm}</span>
+              </label>
+            </section>
             <button
               onClick={onAsk}
               disabled={!canAsk}
@@ -277,6 +373,33 @@ export default function SupervisorPanel({
               <p className="text-[12px] text-zinc-300">{t.supAdviceEmpty}</p>
             ) : (
               <>
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`text-[10.5px] font-mono uppercase ${
+                      advice.harness?.ready ? "text-emerald-400" : "text-amber-400"
+                    }`}
+                  >
+                    {advice.harness?.ready ? t.supHarnessReady : t.supHarnessDraft}
+                  </span>
+                  <button
+                    onClick={copyHarness}
+                    disabled={!advice.context_block}
+                    title={t.supCopyHarness}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 border border-white/[0.12] text-[11px] text-zinc-300 hover:text-emerald-400 hover:border-emerald-500/25 disabled:text-zinc-600"
+                  >
+                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                    {copied ? t.supHarnessCopied : t.supCopyHarness}
+                  </button>
+                </div>
+                {advice.harness?.blockers?.length > 0 && (
+                  <ul className="space-y-1 border-l border-amber-500/30 pl-2">
+                    {advice.harness.blockers.map((blocker) => (
+                      <li key={blocker} className="text-[11px] leading-snug text-amber-300/90">
+                        {blocker}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {advice.archetype && (
                   <p className="text-[11.5px] font-mono text-zinc-300">
                     {t.supArchetype}: <span className="text-emerald-400/90">{advice.archetype}</span>
@@ -290,6 +413,34 @@ export default function SupervisorPanel({
                     </li>
                   ))}
                 </ol>
+                {advice.questions?.length > 0 && (
+                  <section className="border-t border-white/[0.07] pt-2.5">
+                    <h3 className="text-[11px] font-mono uppercase tracking-wider text-zinc-300 mb-2">
+                      {t.supReasoningHeading}
+                    </h3>
+                    <ol className="space-y-2">
+                      {advice.questions.map((item) => (
+                        <li
+                          key={item.id}
+                          title={item.rationale}
+                          className="border-l border-emerald-500/25 pl-2"
+                        >
+                          <p className="text-[10px] font-mono uppercase tracking-wide text-emerald-400/80">
+                            {item.order}. {item.technique} · {item.stage}
+                          </p>
+                          <p className="text-[12px] text-zinc-100 leading-snug mt-0.5">
+                            {item.question}
+                          </p>
+                          {item.condition !== "always" && (
+                            <p className="text-[10.5px] text-zinc-400 mt-0.5">
+                              {t.supReasoningCondition}: {item.condition}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
                 {advice.skills?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {advice.skills.map((s) => (

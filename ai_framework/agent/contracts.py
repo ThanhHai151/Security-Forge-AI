@@ -14,6 +14,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from ai_framework.harness.contracts import RulesOfEngagement
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -87,6 +89,10 @@ class RunConfig(BaseModel):
     model: str | None = None
     base_url: str | None = None
     authorized_targets: set[str] = Field(default_factory=set)
+    # Optional professional engagement control plane. When present, every autonomous tool call
+    # is checked against its authorization, scope, testing window, action gate, and approval
+    # requirements before execution; see ``ai_framework.harness.runtime``.
+    rules_of_engagement: RulesOfEngagement | None = None
     # OPSEC pacing: minimum seconds between network actions to the same host, plus up to
     # this many seconds of random jitter. 0 = fire as fast as possible (default, so tests
     # and the offline demo stay instant). Raise it to behave like a cautious operator.

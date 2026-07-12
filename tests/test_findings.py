@@ -1,6 +1,6 @@
 """Findings store + report export."""
 
-from ai_framework.notes.contracts import Finding, Severity
+from ai_framework.notes.contracts import Confidence, Finding, FindingStatus, Severity
 from ai_framework.notes.report import render_json, render_markdown
 from ai_framework.notes.store import JsonlFindingStore
 
@@ -55,3 +55,23 @@ def test_render_markdown_and_json():
 def test_render_markdown_handles_empty():
     md = render_markdown([], target="t")
     assert "No findings recorded" in md
+
+
+def test_finding_lifecycle_and_framework_metadata_render():
+    finding = Finding(
+        target="t",
+        title="SQLi",
+        severity=Severity.high,
+        status=FindingStatus.reviewed,
+        confidence=Confidence.high,
+        cvss_score=8.1,
+        cwe=["CWE-89"],
+        wstg=["WSTG-INPV-05"],
+        attack=["T1190"],
+        affected_assets=["https://t/search"],
+    )
+    md = render_markdown([finding])
+    assert "[reviewed]" in md
+    assert "CVSS: 8.1" in md
+    assert "CWE: CWE-89" in md
+    assert "WSTG: WSTG-INPV-05" in md

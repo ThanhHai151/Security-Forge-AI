@@ -42,10 +42,14 @@ Nothing here installs or downloads anything.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import os
+import socket
 from collections.abc import Callable
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 # Category ids the UI groups by. Labels + display order are localized on the frontend.
@@ -255,6 +259,50 @@ PROVIDER_TYPES: list[dict[str, Any]] = [
 # (url, json_payload, headers, timeout) -> (status_code, body). Injectable so tests need no network.
 HttpPost = Callable[[str, dict[str, Any], dict[str, str], float], tuple[int, str]]
 
+_METADATA_HOSTS = {
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata.azure.internal",
+    "fd00:ec2::254",
+}
+
+
+class UnsafeProviderEndpoint(ValueError):
+    pass
+
+
+def validate_provider_endpoint(url: str) -> None:
+    """Reject provider URLs that could turn connection tests into an SSRF primitive."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise UnsafeProviderEndpoint("provider URL must be absolute HTTP(S)")
+    if parsed.username or parsed.password:
+        raise UnsafeProviderEndpoint("provider URL must not contain userinfo")
+    host = parsed.hostname.lower().rstrip(".")
+    if host in _METADATA_HOSTS:
+        raise UnsafeProviderEndpoint("cloud metadata endpoints are prohibited")
+    if host == "localhost":
+        return
+    try:
+        addresses = {ipaddress.ip_address(host)}
+    except ValueError:
+        try:
+            addresses = {
+                ipaddress.ip_address(row[4][0]) for row in socket.getaddrinfo(host, None)
+            }
+        except (OSError, ValueError) as exc:
+            raise UnsafeProviderEndpoint(f"provider hostname cannot be resolved: {host}") from exc
+    allow_private = os.getenv("SECFORGE_ALLOW_PRIVATE_PROVIDERS", "") == "1"
+    for address in addresses:
+        if address.is_link_local or address.is_multicast or address.is_unspecified:
+            raise UnsafeProviderEndpoint("unsafe provider destination address")
+        if (address.is_private or address.is_loopback) and not (
+            address.is_loopback or allow_private
+        ):
+            raise UnsafeProviderEndpoint(
+                "private provider addresses require SECFORGE_ALLOW_PRIVATE_PROVIDERS=1"
+            )
+
 
 def probe_models(base_url: str, api_key: str = "", timeout: float = 5.0) -> list[str]:
     """List model ids from an OpenAI-compatible ``<base>/models`` endpoint (best effort)."""
@@ -262,10 +310,11 @@ def probe_models(base_url: str, api_key: str = "", timeout: float = 5.0) -> list
         return []
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
+        validate_provider_endpoint(base_url)
         req = Request(base_url.rstrip("/") + "/models", headers=headers, method="GET")
         with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - user-supplied endpoint
             data = json.loads(resp.read())
-    except (HTTPError, URLError, OSError, json.JSONDecodeError):
+    except (HTTPError, URLError, OSError, json.JSONDecodeError, UnsafeProviderEndpoint):
         return []
     rows = data.get("data") if isinstance(data, dict) else data
     ids = [str(r["id"]) for r in rows or [] if isinstance(r, dict) and r.get("id")]
@@ -276,6 +325,7 @@ def _default_post(
     url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float
 ) -> tuple[int, str]:
     """POST JSON and return ``(status, body)``. A 4xx/5xx is a *result* (reachable), not a raise."""
+    validate_provider_endpoint(url)
     data = json.dumps(payload).encode()
     req = Request(url, data=data, headers=headers, method="POST")
     try:
@@ -390,6 +440,8 @@ def check_endpoint(
         }
     try:
         status, body = post(url, payload, headers, timeout)
+    except UnsafeProviderEndpoint as exc:
+        return {"ok": False, "status": 0, "reason": "config", "error": str(exc)}
     except (URLError, OSError) as exc:  # connection refused, DNS, timeout — endpoint unreachable
         return {"ok": False, "status": 0, "reason": "unreachable",
                 "error": str(getattr(exc, "reason", exc))}
@@ -401,6 +453,8 @@ def _probe(post: HttpPost, url: str, payload: dict[str, Any], headers: dict[str,
     """Shared ``{ok, status, reason?, error?}`` POST probe used by the per-style checks below."""
     try:
         status, body = post(url, payload, headers, timeout)
+    except UnsafeProviderEndpoint as exc:
+        return {"ok": False, "status": 0, "reason": "config", "error": str(exc)}
     except (URLError, OSError) as exc:
         return {"ok": False, "status": 0, "reason": "unreachable",
                 "error": str(getattr(exc, "reason", exc))}

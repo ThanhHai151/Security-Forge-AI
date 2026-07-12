@@ -36,6 +36,16 @@ export default function Agent({ t, locale = "en" }) {
 
   const [question, setQuestion] = useState("");
   const [scanMode, setScanMode] = useState("standard"); // "quick" | "standard" | "deep"
+  const [harnessConfig, setHarnessConfig] = useState({
+    vendor: "generic",
+    authorizationConfirmed: false,
+    authorizationReference: "",
+    allowSubdomains: false,
+    excludedTargets: "",
+    assetCriticality: "unknown",
+    windowStart: "",
+    windowEnd: "",
+  });
   const [advice, setAdvice] = useState(null);
   const [adviceErr, setAdviceErr] = useState("");
   const [asking, setAsking] = useState(false);
@@ -77,22 +87,37 @@ export default function Agent({ t, locale = "en" }) {
     loadRoots();
   }, [activeDomain, loadTree, loadChains, loadRoots]);
 
+  // Authorization is target-specific. Never carry confirmation, references, exclusions, or a
+  // time window across a domain switch, even when navigation happens through the mind map.
+  const resetHarnessAuthorization = useCallback(() => {
+    setHarnessConfig((current) => ({
+      ...current,
+      authorizationConfirmed: false,
+      authorizationReference: "",
+      excludedTargets: "",
+      windowStart: "",
+      windowEnd: "",
+    }));
+  }, []);
+
   // Single-click a domain: just select it, so the vuln catalog to its right updates. Opening
   // the (heavier) full mind map is reserved for a deliberate double-click or a vuln row —
   // see onOpenDomainMap/onOpenNode below.
   const onSelectDomain = useCallback((domain) => {
+    if (domain !== activeDomain) resetHarnessAuthorization();
     setActiveDomain(domain);
     setAdvice(null);
     setAdviceErr("");
     setIngestResult(null);
     setIngestErr("");
-  }, []);
+  }, [activeDomain, resetHarnessAuthorization]);
 
   const onOpenDomainMap = useCallback((domain) => {
+    if (domain !== activeDomain) resetHarnessAuthorization();
     setActiveDomain(domain);
     setMindMapFocusId(null);
     setMindMapOpen(true);
-  }, []);
+  }, [activeDomain, resetHarnessAuthorization]);
 
   const onOpenNode = useCallback((nodeId) => {
     setMindMapFocusId(nodeId);
@@ -158,6 +183,24 @@ export default function Agent({ t, locale = "en" }) {
         question: question.trim(),
         mode: "blackbox",
         scanMode,
+        vendor: harnessConfig.vendor,
+        rulesOfEngagement: {
+          authorization_confirmed: harnessConfig.authorizationConfirmed,
+          authorization_reference: harnessConfig.authorizationReference.trim(),
+          authorized_targets: [activeDomain],
+          excluded_targets: harnessConfig.excludedTargets
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          allow_subdomains: harnessConfig.allowSubdomains,
+          asset_criticality: harnessConfig.assetCriticality,
+          window_start: harnessConfig.windowStart
+            ? new Date(harnessConfig.windowStart).toISOString()
+            : undefined,
+          window_end: harnessConfig.windowEnd
+            ? new Date(harnessConfig.windowEnd).toISOString()
+            : undefined,
+        },
       });
       setAdvice(result);
       refreshActiveDomain();
@@ -166,7 +209,7 @@ export default function Agent({ t, locale = "en" }) {
     } finally {
       setAsking(false);
     }
-  }, [activeDomain, question, scanMode, refreshActiveDomain]);
+  }, [activeDomain, question, scanMode, harnessConfig, refreshActiveDomain]);
 
   const onIngest = useCallback(async () => {
     if (!activeDomain || !ingestText.trim()) return;
@@ -280,6 +323,8 @@ export default function Agent({ t, locale = "en" }) {
             setQuestion={setQuestion}
             scanMode={scanMode}
             setScanMode={setScanMode}
+            harnessConfig={harnessConfig}
+            setHarnessConfig={setHarnessConfig}
             onExportSarif={onExportSarif}
             onAsk={onAsk}
             asking={asking}

@@ -70,9 +70,8 @@ export const resetUsage = (accountId) =>
   send("POST", "/usage/reset", accountId ? { account_id: accountId } : {});
 // Pool-wide model overview (network-free). -> { accounts:[...], catalog:[{provider,label,models}] }
 export const getModelsOverview = () => get("/models");
-// Backup: the raw export object; the UI turns it into a downloadable file.
-export const exportAccounts = (includeKeys = false) =>
-  get(`/accounts/export?include_keys=${includeKeys ? 1 : 0}`);
+// Backup excludes secrets. Credentials remain encrypted locally and are never exported.
+export const exportAccounts = () => get("/accounts/export");
 // Restore: add accounts from an uploaded export. mode: "merge" (dedupe) | "replace" (clear first).
 export const importAccounts = (accounts, mode = "merge") =>
   send("POST", "/accounts/import", { accounts, mode });
@@ -92,14 +91,24 @@ export const getMemory = (target = "") =>
 // ── Expert Supervisor + Hermes notebook (the default advisory flow) ──
 // Never calls an AI provider and never touches the target itself — it hands a ranked
 // strategy + skill(s) to whichever coding agent (e.g. Claude Code) the operator drives.
-// -> { domain, archetype, plan: [{order, action, reasoning, taxonomy_ref}], skills, context_block }
-export const advise = ({ domain, question, mode = "blackbox", projectPath, scanMode = "standard" } = {}) =>
+// -> { domain, archetype, plan, skills, questions, harness, context_block }
+export const advise = ({
+  domain,
+  question,
+  mode = "blackbox",
+  projectPath,
+  scanMode = "standard",
+  vendor = "generic",
+  rulesOfEngagement,
+} = {}) =>
   send("POST", "/supervisor/advise", {
     domain,
     question,
     mode,
     project_path: projectPath || undefined,
     scan_mode: scanMode,
+    vendor,
+    rules_of_engagement: rulesOfEngagement,
   });
 // Shared category -> technique tree (the same vocabulary the notebook and skills use).
 export const getTaxonomy = () => get("/taxonomy"); // -> { tree: [{id, label, children}] }

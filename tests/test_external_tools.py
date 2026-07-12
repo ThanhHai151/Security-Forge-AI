@@ -6,8 +6,8 @@ from ai_framework.tools.base import ToolContext, tool_is_mutating
 from ai_framework.tools.external import ExternalReconTool, is_mutating_call
 
 
-def _ctx(runner=None, targets=("example.com",)):
-    return ToolContext(authorized_targets=set(targets), runner=runner)
+def _ctx(runner=None, targets=("example.com",), workspace=""):
+    return ToolContext(authorized_targets=set(targets), runner=runner, workspace=str(workspace))
 
 
 def _capture():
@@ -60,12 +60,17 @@ def test_ffuf_requires_a_wordlist():
         tool.run({"tool": "ffuf", "target": "https://example.com"}, _ctx(lambda a, t: (0, "", "")))
 
 
-def test_ffuf_with_wordlist_injects_fuzz_and_list():
+def test_ffuf_with_wordlist_injects_fuzz_and_list(tmp_path):
     runner, seen = _capture()
     tool = ExternalReconTool()
-    tool.run({"tool": "ffuf", "target": "https://example.com", "wordlist": "/wl.txt"}, _ctx(runner))
+    wordlist = tmp_path / "wl.txt"
+    wordlist.write_text("admin\n", encoding="utf-8")
+    tool.run(
+        {"tool": "ffuf", "target": "https://example.com", "wordlist": str(wordlist)},
+        _ctx(runner, workspace=tmp_path),
+    )
     assert "https://example.com/FUZZ" in seen["argv"]
-    assert "/wl.txt" in seen["argv"]
+    assert str(wordlist) in seen["argv"]
 
 
 def test_unknown_tool_rejected():
@@ -74,11 +79,10 @@ def test_unknown_tool_rejected():
         tool.run({"tool": "rm-rf", "target": "example.com"}, _ctx(lambda a, t: (0, "", "")))
 
 
-def test_missing_binary_degrades_gracefully_without_runner():
-    # No injected runner + a binary that is not installed → a clear message, not a crash.
+def test_host_execution_is_blocked_without_isolated_runner():
     tool = ExternalReconTool()
     out = tool.run({"tool": "nuclei", "target": "https://example.com"}, _ctx(runner=None))
-    assert "not installed" in out.lower()
+    assert "no isolated tool runner" in out.lower()
 
 
 def test_runner_error_is_caught_as_not_installed():
@@ -100,6 +104,8 @@ def test_output_is_truncated():
 def test_per_call_intrusiveness():
     assert is_mutating_call({"tool": "nuclei"}) is True
     assert is_mutating_call({"tool": "sqlmap"}) is True
+    assert is_mutating_call({"tool": "nmap"}) is True
+    assert is_mutating_call({"tool": "katana"}) is True
     assert is_mutating_call({"tool": "httpx"}) is False
     # And the loop/guardrail helper honours the per-call hook.
     tool = ExternalReconTool()

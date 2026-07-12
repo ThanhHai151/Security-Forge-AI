@@ -27,17 +27,28 @@ notebook tracks coverage for each target across sessions.
    - **Quick** — a handful of high-impact classes, time-boxed (good for a fast triage / CI).
    - **Standard** — balanced coverage of the whole attack surface (the default).
    - **Deep** — exhaustive, with active vulnerability chaining.
-4. Click **Ask the Supervisor**.
+4. Complete **Rules of engagement**: select the agent harness and asset criticality; enter the
+   signed authorization reference, testing window, exclusions, and subdomain policy; then confirm
+   written authorization. Missing fields are allowed for planning but produce a blocked harness
+   that prohibits target traffic.
+5. Click **Ask the Supervisor**.
 
 ## Step 3 — Read the investigation plan
 
-Open the **Plan** drawer to see the ranked **investigation order**, the detected **app archetype**
-(e.g. "HR / employee management"), and the **skills** picked for the job. The top step is
-automatically marked *in progress* (an amber ring on that technique in the catalog).
+Open the **Plan** drawer to see harness readiness, any blocking RoE fields, the ranked
+**investigation order**, the detected **app archetype**
+(e.g. "social network" or "multi-user data management"), the **skills** picked for the job,
+and **Questions to resolve**. Those questions form an evidence chain: map the surface, identify
+the implementation, run a paired safe control, then prove minimum impact. Conditional questions
+tell the agent when to continue or prune a branch. The top step is automatically marked *in
+progress* (an amber ring on that technique in the catalog).
 
 ## Step 4 — Run it with your coding agent
 
-Hand the plan and skills to your external agent (Claude Code). **SecForge advises; the agent
+Click **Copy harness** and hand the generated briefing (RoE, gates, phases, plan, questions, and
+skills) to your selected external agent (Claude Code, OpenAI Codex, Cursor, or another host).
+Ask it to answer every question from logs or source and to skip conditions that are false.
+**SecForge advises; the agent
 executes** — it does the real recon, exploitation, and proof-of-concept validation against the
 target. SecForge deliberately never sends traffic to the target itself.
 

@@ -3,7 +3,6 @@ import {
   ArrowsDownUp,
   DownloadSimple,
   UploadSimple,
-  Warning,
   CircleNotch,
   CheckCircle,
   FileArrowUp,
@@ -13,7 +12,6 @@ import { exportAccounts, importAccounts } from "../lib/api";
 import SettingsModal from "./SettingsModal";
 
 export default function ImportExportModal({ t, onClose }) {
-  const [includeKeys, setIncludeKeys] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [rows, setRows] = useState(null); // parsed accounts array, ready to import
@@ -25,7 +23,7 @@ export default function ImportExportModal({ t, onClose }) {
   const onExport = useCallback(async () => {
     setBusy(true);
     try {
-      const data = await exportAccounts(includeKeys);
+      const data = await exportAccounts();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const stamp = new Date().toISOString().slice(0, 10);
@@ -39,7 +37,7 @@ export default function ImportExportModal({ t, onClose }) {
     } finally {
       setBusy(false);
     }
-  }, [includeKeys]);
+  }, []);
 
   const onFile = useCallback(
     async (e) => {
@@ -92,20 +90,6 @@ export default function ImportExportModal({ t, onClose }) {
           <DownloadSimple size={14} weight="bold" className="text-emerald-400" /> {t.ioExport}
         </p>
         <p className="text-[11.5px] text-zinc-500">{t.ioExportNote}</p>
-        <label className="flex items-start gap-2 text-[12px] text-zinc-300 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeKeys}
-            onChange={(e) => setIncludeKeys(e.target.checked)}
-            className="mt-0.5 accent-emerald-500"
-          />
-          <span>{t.ioIncludeKeys}</span>
-        </label>
-        {includeKeys && (
-          <p className="flex items-start gap-2 text-[11px] leading-relaxed text-amber-300/90 border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2">
-            <Warning size={14} weight="fill" className="mt-0.5 shrink-0" /> {t.ioKeysWarning}
-          </p>
-        )}
         <button
           onClick={onExport}
           disabled={busy}

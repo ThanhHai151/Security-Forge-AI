@@ -86,9 +86,10 @@ def test_missing_url_is_unverified():
     assert not ok and "no request.url" in note
 
 
-def test_no_expectation_uses_2xx_as_weak_confirmation():
-    assert V.verify({"request": {"url": "http://example.com/"}}, _ctx(204, ""))[0] is True
-    assert V.verify({"request": {"url": "http://example.com/"}}, _ctx(404, ""))[0] is False
+def test_no_expectation_never_confirms_reachability_as_a_vulnerability():
+    ok, note = V.verify({"request": {"url": "http://example.com/"}}, _ctx(204, ""))
+    assert ok is False
+    assert "no explicit expect" in note
 
 
 def test_report_shows_verified_and_unverified_badges():

@@ -20,6 +20,8 @@ archetype_store.json
 # Tooling state
 .serena/
 ai_accounts.json
+ai_accounts.key
+*.key
 ai_usage.json
 memory_store.jsonl
 

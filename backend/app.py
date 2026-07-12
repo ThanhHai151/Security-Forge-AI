@@ -35,7 +35,7 @@ API routes (with or without the ``/api`` prefix):
     PATCH  /accounts/{id}      -> 200 {account} | 404      body: partial fields
     DELETE /accounts/{id}      -> 200 {ok} | 404
     GET    /accounts/{id}/models -> 200 {models:[...]}
-    GET    /accounts/export?include_keys=0|1 -> 200 {version, policy, accounts:[...]}  (backup)
+    GET    /accounts/export -> 200 {version, policy, accounts:[...]}  (credential-free backup)
     POST   /accounts/import    -> 200 {added, skipped} | 400   body: {accounts:[...], mode?}
     GET    /usage              -> 200 {accounts:[{id,label,limits,total,today,health}]}  (quota)
     POST   /usage/reset        -> 200 {ok}                 body: {account_id?}  (all when absent)
@@ -52,8 +52,10 @@ API routes (with or without the ``/api`` prefix):
 
     -- Expert Supervisor + Hermes notebook (the default advisory flow; never calls an AI
        provider or executes anything against a target) --
-    POST  /supervisor/advise   body: {domain, question, mode?, project_path?, scan_mode?}
-                                      -> 200 {domain, archetype, plan, skills, context_block}
+    POST  /supervisor/advise   body: {domain, question, mode?, project_path?, scan_mode?,
+                                      vendor?, rules_of_engagement?}
+                                      -> 200 {domain, archetype, plan, skills, questions,
+                                              harness, context_block}
                                       (scan_mode: quick|standard|deep, default standard)
     GET   /taxonomy            -> 200 {tree}                       (shared category->technique tree)
     GET   /archetypes          -> 200 {archetypes}                 (seeded + user-saved heuristics)
@@ -107,6 +109,8 @@ Host/port via SECFORGE_API_HOST / SECFORGE_API_PORT.
 
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import json
 import mimetypes
 import os
@@ -121,11 +125,28 @@ from ai_framework.router.accounts import Account
 from ai_framework.router.oauth import PROVIDERS as OAUTH_PROVIDERS
 from ai_framework.router.oauth import OAuthError, OAuthManager
 from ai_framework.router.router import health_snapshot
+from ai_framework.security.redaction import redact_data, redact_text
 from backend.providers import PROVIDER_TYPES, check_endpoint, probe_models
 from backend.service import AutonomousDisabledError, RunService
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 61021  # dev (API-only). The packaged launcher binds 61022 with static_root.
+_MAX_API_BODY = 2 * 1024 * 1024
+
+
+def _is_loopback(value: str) -> bool:
+    host = value.strip().lower().strip("[]")
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _header_host(value: str) -> str:
+    parsed = urlparse("//" + value.strip())
+    return (parsed.hostname or "").lower()
 
 
 def _router_view(service: RunService) -> dict[str, Any]:
@@ -177,20 +198,19 @@ def _models_view(service: RunService) -> dict[str, Any]:
     return {"accounts": accounts, "catalog": catalog}
 
 
-def _export_accounts(service: RunService, include_keys: bool) -> dict[str, Any]:
-    """Serialize every account for download/backup. Secrets are included only when asked."""
+def _export_accounts(service: RunService) -> dict[str, Any]:
+    """Serialize a credential-free account preset for download/backup."""
     rows = []
     for a in service.accounts.list_accounts():
         row = a.model_dump()
-        if not include_keys:  # scrub every credential-bearing field for a shareable preset
-            row["api_key"] = ""
-            row["refresh_token"] = ""
-            row["provider_data"] = {}
+        row["api_key"] = ""
+        row["refresh_token"] = ""
+        row["provider_data"] = {}
         rows.append(row)
     return {
         "version": 1,
         "kind": "secforge-accounts",
-        "include_keys": include_keys,
+        "include_keys": False,
         "policy": service.accounts.get_policy(),
         "accounts": rows,
     }
@@ -241,9 +261,10 @@ def _provider_label(kind: str) -> str:
 
 
 def make_handler(
-    service: RunService, static_root: Path | None = None
+    service: RunService, static_root: Path | None = None, api_token: str | None = None
 ) -> type[BaseHTTPRequestHandler]:
     root = static_root.resolve() if static_root else None
+    configured_token = api_token if api_token is not None else os.getenv("SECFORGE_API_TOKEN", "")
     # One OAuth manager per server so pending sign-in sessions survive across requests.
     oauth = OAuthManager()
 
@@ -256,14 +277,40 @@ def make_handler(
         def _send(self, code: int, payload: Any) -> None:
             body = (payload if isinstance(payload, str) else json.dumps(payload)).encode()
             self.send_response(code)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
             self.end_headers()
             self.wfile.write(body)
 
         def _body(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length", 0))
+            if length > _MAX_API_BODY:
+                raise ValueError(f"request body exceeds {_MAX_API_BODY} bytes")
             return json.loads(self.rfile.read(length) or b"{}")
+
+        def _authorize_request(self) -> bool:
+            """Protect the localhost control plane from exposure and DNS-rebinding access."""
+            peer = str(self.client_address[0])
+            supplied = self.headers.get("Authorization", "")
+            expected = f"Bearer {configured_token}" if configured_token else ""
+            token_ok = bool(expected) and hmac.compare_digest(supplied, expected)
+            if token_ok:
+                return True
+            if configured_token:
+                self._send(401, {"error": "missing or invalid API bearer token"})
+                return False
+            host_is_local = _is_loopback(_header_host(self.headers.get("Host", "")))
+            if not _is_loopback(peer) or not host_is_local:
+                self._send(403, {"error": "local API accepts loopback requests only"})
+                return False
+            origin = self.headers.get("Origin", "").strip()
+            if origin and not _is_loopback(urlparse(origin).hostname or ""):
+                self._send(403, {"error": "cross-origin request rejected"})
+                return False
+            return True
 
         # ── POST ──
         def _post_impl(self) -> None:
@@ -277,6 +324,8 @@ def make_handler(
                         mode=b.get("mode", "blackbox"),
                         project_path=b.get("project_path"),
                         scan_mode=b.get("scan_mode", "standard"),
+                        vendor=b.get("vendor", "generic"),
+                        rules_of_engagement=b.get("rules_of_engagement"),
                     )
                 except Exception as exc:  # noqa: BLE001
                     return self._send(400, {"error": str(exc)})
@@ -288,7 +337,7 @@ def make_handler(
                     return self._send(400, {"error": str(exc)})
                 try:
                     return self._send(201, {"id": service.start_run(config)})
-                except AutonomousDisabledError as exc:
+                except (AutonomousDisabledError, PermissionError) as exc:
                     return self._send(403, {"error": str(exc)})
             if path.startswith("/runs/") and path.endswith("/stop"):
                 rid = path[len("/runs/") : -len("/stop")]
@@ -301,7 +350,7 @@ def make_handler(
                     return self._send(400, {"error": str(exc)})
                 try:
                     return self._send(201, {"id": service.start_campaign(cfg)})
-                except AutonomousDisabledError as exc:
+                except (AutonomousDisabledError, PermissionError) as exc:
                     return self._send(403, {"error": str(exc)})
             if path == "/pentest":
                 # One-shot autonomous pentest: caller supplies only an address. Accept it under
@@ -315,7 +364,7 @@ def make_handler(
                     return self._send(400, {"error": str(exc)})
                 try:
                     return self._send(201, {"id": service.start_pentest(cfg)})
-                except AutonomousDisabledError as exc:
+                except (AutonomousDisabledError, PermissionError) as exc:
                     return self._send(403, {"error": str(exc)})
             if path.startswith("/campaigns/"):
                 rest = path[len("/campaigns/") :]
@@ -542,7 +591,12 @@ def make_handler(
             if path == "/accounts/export":
                 inc = (parse_qs(parsed.query).get("include_keys") or ["0"])[0]
                 include_keys = inc in {"1", "true", "yes"}
-                return self._send(200, _export_accounts(service, include_keys))
+                if include_keys:
+                    return self._send(
+                        403,
+                        {"error": "secret export is disabled; use the encrypted account store"},
+                    )
+                return self._send(200, _export_accounts(service))
             if path == "/usage":
                 return self._send(200, _usage_view(service))
             if path == "/models":
@@ -598,7 +652,7 @@ def make_handler(
                 campaign = service.get_campaign(path.removeprefix("/campaigns/"))
                 if campaign is None:
                     return self._send(404, {"error": "unknown campaign id"})
-                return self._send(200, campaign)
+                return self._send(200, redact_data(campaign))
             if path == "/runs":
                 return self._send(200, {"runs": service.list_runs()})
             if path == "/findings":
@@ -607,19 +661,22 @@ def make_handler(
             if path == "/assets":
                 target = (query.get("target") or [""])[0]
                 return self._send(200, service.assets_summary(target))
+            if path == "/evidence/verify":
+                return self._send(200, service.evidence_status())
             if path.startswith("/runs/") and path.endswith("/report"):
                 rid = path[len("/runs/") : -len("/report")]
                 fmt = (query.get("format") or ["md"])[0]
                 report = service.run_report(rid, fmt)
                 if report is None:
                     return self._send(404, {"error": "unknown run id"})
-                payload = report if fmt == "json" else {"format": "md", "report": report}
+                clean = redact_data(report)
+                payload = clean if fmt == "json" else {"format": "md", "report": clean}
                 return self._send(200, payload)
             if path.startswith("/runs/"):
                 run = service.get_run(path.removeprefix("/runs/"))
                 if not run:
                     return self._send(404, {"error": "unknown run id"})
-                return self._send(200, run.model_dump_json())
+                return self._send(200, redact_data(run.model_dump(mode="json")))
             # Non-API GET → static frontend (packaged mode), else 404.
             if root is not None:
                 return self._serve_static(parsed.path)
@@ -652,9 +709,12 @@ def make_handler(
         # every provider had vanished, when only one endpoint's response body wasn't JSON).
         def _guarded(self, impl: Any) -> None:
             try:
+                if not self._authorize_request():
+                    return
                 impl()
             except Exception as exc:  # noqa: BLE001 - last-resort handler, must not re-raise
-                self._send(500, {"error": f"{type(exc).__name__}: {exc}"})
+                message = redact_text(f"{type(exc).__name__}: {exc}")
+                self._send(500, redact_data({"error": message}))
 
         def do_GET(self) -> None:  # noqa: N802 - http.server API
             self._guarded(self._get_impl)
@@ -681,7 +741,12 @@ def build_server(
     static_root: Path | None = None,
 ) -> ThreadingHTTPServer:
     """Construct (but don't start) the threaded HTTP server."""
-    return ThreadingHTTPServer((host, port), make_handler(service, static_root))
+    token = os.getenv("SECFORGE_API_TOKEN", "").strip()
+    if not _is_loopback(host) and not token:
+        raise RuntimeError(
+            "non-loopback API binding requires SECFORGE_API_TOKEN; refusing insecure exposure"
+        )
+    return ThreadingHTTPServer((host, port), make_handler(service, static_root, token))
 
 
 def main() -> None:

@@ -19,6 +19,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 _LIST_RE = re.compile(r"\[(.*)\]")
+_QUESTION_RE = re.compile(
+    r"^\s*-\s+\[(?P<stage>[a-z][a-z0-9-]*)(?:\s*\|\s*(?P<condition>[^\]]+))?\]\s+"
+    r"(?P<question>.+?)\s*$",
+    re.IGNORECASE,
+)
 
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, str | list[str]], str]:
@@ -82,6 +87,7 @@ class Skill(BaseModel):
     domain: str = ""
     subdomain: str = ""
     owasp: list[str] = Field(default_factory=list)
+    catalog: str = ""
     dir: str = ""  # directory name (== name by convention)
 
     def trigger(self) -> str:
@@ -89,6 +95,46 @@ class Skill(BaseModel):
         src = self.when_to_use or self.description
         first = src.strip().split("\n", 1)[0].strip()
         return (first[:200] + "…") if len(first) > 200 else first
+
+    def catalog_slug(self) -> str:
+        """Return the catalog directory this skill covers, or ``""`` for non-vuln skills."""
+        if not self.catalog:
+            return ""
+        path = Path(self.catalog)
+        return path.parent.name if path.name.lower() == "readme.md" else ""
+
+
+class SkillQuestion(BaseModel):
+    """One staged hypothesis question embedded in a skill manifest.
+
+    The markdown wire format is intentionally tiny and readable:
+    ``- [fingerprint | if an injectable parameter exists] Which database is behind it?``
+    """
+
+    stage: str
+    question: str
+    condition: str = "always"
+
+
+def _questions(body: str) -> list[SkillQuestion]:
+    """Parse ``## Reasoning Questions`` bullets, ignoring ordinary prose/bullets."""
+    section = _section(body, "Reasoning Questions")
+    out: list[SkillQuestion] = []
+    for line in section.splitlines():
+        match = _QUESTION_RE.match(line)
+        if not match:
+            continue
+        question = match.group("question").strip()
+        if not question:
+            continue
+        out.append(
+            SkillQuestion(
+                stage=match.group("stage").lower(),
+                condition=(match.group("condition") or "always").strip(),
+                question=question,
+            )
+        )
+    return out
 
 
 def _localized(canonical: Path, locale: str) -> Path:
@@ -130,6 +176,7 @@ class SkillRegistry:
                     domain=str(front.get("domain") or ""),
                     subdomain=str(front.get("subdomain") or ""),
                     owasp=[str(o) for o in owasp] if isinstance(owasp, list) else [],
+                    catalog=str(front.get("catalog") or ""),
                     dir=path.parent.name,
                 )
             )
@@ -154,3 +201,28 @@ class SkillRegistry:
             return target.read_text(encoding="utf-8")
         except OSError:
             return None
+
+    def questions(self, name: str, locale: str = "en") -> list[SkillQuestion]:
+        """Load the skill's staged reasoning questions with English fallback.
+
+        Localized manifests may lag the canonical workflow. If a localized file exists but
+        has no question section yet, use the English questions rather than returning an empty
+        decision chain.
+        """
+        skill = self.get(name)
+        if skill is None:
+            return []
+        canonical = self.root / skill.dir / "SKILL.md"
+        localized = _localized(canonical, locale)
+        candidates = [localized]
+        if localized != canonical:
+            candidates.append(canonical)
+        for path in candidates:
+            try:
+                _, body = _parse_frontmatter(path.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            parsed = _questions(body)
+            if parsed:
+                return parsed
+        return []

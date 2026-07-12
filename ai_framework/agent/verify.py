@@ -65,9 +65,13 @@ class FindingVerifier:
             ok = ok and hit
             checks.append(f"status {status} {'==' if hit else '!='} {want}")
         if not checks:
-            # No explicit expectation: treat a 2xx replay as weak confirmation.
-            ok = 200 <= status < 300
-            checks.append(f"no expectation given; status {status}")
+            # A successful response only proves reachability, not a vulnerability. Requiring a
+            # caller-defined differentiating signal prevents ordinary 2xx pages becoming
+            # "verified" findings.
+            return False, (
+                f"replayed {method} {url} -> HTTP {status}; no explicit expect or "
+                "expect_status supplied (unverified)"
+            )
         verdict = "confirmed" if ok else "NOT reproduced"
         note = f"replayed {method} {url} -> HTTP {status}; " + "; ".join(checks) + f" ({verdict})"
         return ok, note

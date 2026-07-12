@@ -62,6 +62,14 @@ class NoteFindingTool:
                 },
                 "kb_ref": {"type": "string", "description": "Related knowledge-base note id."},
                 "tags": {"type": "array", "items": {"type": "string"}},
+                "cvss_score": {"type": "number", "minimum": 0, "maximum": 10},
+                "cvss_vector": {"type": "string", "description": "Validated CVSS vector."},
+                "cwe": {"type": "array", "items": {"type": "string"}},
+                "owasp": {"type": "string"},
+                "wstg": {"type": "array", "items": {"type": "string"}},
+                "attack": {"type": "array", "items": {"type": "string"}},
+                "affected_assets": {"type": "array", "items": {"type": "string"}},
+                "remediation_owner": {"type": "string"},
                 "repro": {
                     "type": "object",
                     "description": (

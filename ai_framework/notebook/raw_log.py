@@ -8,10 +8,13 @@ never writes back into it.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from ai_framework.security.redaction import redact_data
 
 
 def _now() -> datetime:
@@ -32,7 +35,7 @@ class RawLogStore:
         entry = RawLogEntry(domain=domain, text=text)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(entry.model_dump_json() + "\n")
+            fh.write(json.dumps(redact_data(entry.model_dump(mode="json"))) + "\n")
         return entry
 
     def for_domain(self, domain: str) -> list[RawLogEntry]:

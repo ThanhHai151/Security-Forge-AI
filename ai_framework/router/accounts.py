@@ -18,6 +18,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, ValidationError
 
+from ai_framework.router.secrets import SecretCipher
+
 # Fallback ordering for the "tiered" policy: paid subscriptions first (most reliable), then
 # pay-as-you-go, then free pools (most likely to rate-limit).
 TIERS = ("subscription", "standard", "free")
@@ -85,13 +87,26 @@ class AccountStore:
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path or default_path())
         self._lock = threading.Lock()
+        self._cipher = SecretCipher(self.path)
+        self._migrate_plaintext_store()
+
+    def _migrate_plaintext_store(self) -> None:
+        if not self.path.exists():
+            return
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+        if self._cipher.needs_migration(raw):
+            self._save(self._cipher.unprotect_store(raw))
 
     # ── persistence ──
     def _load(self) -> dict:
         if not self.path.exists():
             return {"policy": "tiered", "accounts": []}
         try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            return self._cipher.unprotect_store(raw)
         except (json.JSONDecodeError, OSError):
             return {"policy": "tiered", "accounts": []}
 
@@ -100,8 +115,11 @@ class AccountStore:
         # Write-then-rename (same pattern as JsonRunStore.save) so a request landing mid-write —
         # e.g. the Providers page polling /accounts every 5s — never sees a torn/truncated file.
         tmp = self.path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        protected = self._cipher.protect_store(data)
+        tmp.write_text(json.dumps(protected, indent=2), encoding="utf-8")
+        os.chmod(tmp, 0o600)
         tmp.replace(self.path)
+        os.chmod(self.path, 0o600)
 
     # ── accounts ──
     def list_accounts(self) -> list[Account]:

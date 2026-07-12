@@ -7,6 +7,7 @@ _save() must never leave the file in a half-written state a concurrent reader co
 """
 
 import json
+import stat
 
 from ai_framework.router.accounts import Account, AccountStore
 
@@ -66,3 +67,32 @@ def test_update_and_remove_survive_a_prior_corrupted_row(tmp_path):
 
     assert store.update(good.id, {"label": "renamed"}).label == "renamed"
     assert store.list_accounts()[0].label == "renamed"  # corrupt row still skipped, not crashing
+
+
+def test_credentials_are_encrypted_at_rest_and_round_trip(tmp_path):
+    path = tmp_path / "accounts.json"
+    store = AccountStore(path=str(path))
+    account = store.add(
+        Account(
+            label="private",
+            base_url="https://x/v1",
+            api_key="sk-do-not-store-plain",
+            refresh_token="refresh-do-not-store-plain",
+            provider_data={"clientSecret": "provider-secret"},
+        )
+    )
+
+    raw = path.read_text(encoding="utf-8")
+    assert "sk-do-not-store-plain" not in raw
+    assert "refresh-do-not-store-plain" not in raw
+    assert "provider-secret" not in raw
+    assert "enc:v1:" in raw
+
+    restored = AccountStore(path=str(path)).get(account.id)
+    assert restored is not None
+    assert restored.api_key == "sk-do-not-store-plain"
+    assert restored.refresh_token == "refresh-do-not-store-plain"
+    assert restored.provider_data["clientSecret"] == "provider-secret"
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(path.with_suffix(".key").stat().st_mode) == 0o600

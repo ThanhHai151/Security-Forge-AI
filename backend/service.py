@@ -35,6 +35,10 @@ from ai_framework.agent.opsec import Pacer
 from ai_framework.agent.run_store import JsonRunStore
 from ai_framework.agent.system import campaign_context_block
 from ai_framework.agent.verify import FindingVerifier
+from ai_framework.evidence import EvidenceLedger
+from ai_framework.harness.limits import EngagementLimiter
+from ai_framework.harness.policy import evaluate_action, preflight_blockers
+from ai_framework.harness.runtime import action_request_for_tool, approval_token_for_call
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
 from ai_framework.notebook.contracts import NodeStatus
@@ -69,6 +73,7 @@ from ai_framework.tools.security import (
 from ai_framework.tools.skills_tool import LoadSkillTool
 
 _AUTONOMOUS_ENV = "SECFORGE_ENABLE_AUTONOMOUS"
+_REQUIRE_ROE_ENV = "SECFORGE_REQUIRE_ROE"
 
 
 class AutonomousDisabledError(RuntimeError):
@@ -84,6 +89,22 @@ class AutonomousDisabledError(RuntimeError):
 
 def _autonomous_enabled() -> bool:
     return os.getenv(_AUTONOMOUS_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _roe_required() -> bool:
+    return os.getenv(_REQUIRE_ROE_ENV, "1").strip().lower() not in {"0", "false", "no"}
+
+
+def _require_ready_roe(config: RunConfig) -> None:
+    if not _roe_required():
+        return
+    if config.rules_of_engagement is None:
+        raise PermissionError(
+            "autonomous execution requires a validated rules_of_engagement object"
+        )
+    blockers = preflight_blockers(config.rules_of_engagement, primary_target=config.target)
+    if blockers:
+        raise PermissionError("RoE preflight failed: " + "; ".join(blockers))
 
 
 def default_registry() -> ToolRegistry:
@@ -139,6 +160,7 @@ class RunService:
         notebook_dir: str | None = "notebook_store",
         archetype_path: str | None = "archetype_store.json",
         raw_log_path: str | None = "raw_output_store.jsonl",
+        evidence_path: str | None = None,
     ) -> None:
         self._registry = registry or default_registry()
         self._memory_path = memory_path
@@ -156,6 +178,9 @@ class RunService:
         self._notebook_dir = notebook_dir or "notebook_store"
         self._archetype_path = archetype_path or "archetype_store.json"
         self._raw_log_path = raw_log_path or "raw_output_store.jsonl"
+        self._evidence_path = evidence_path or os.getenv(
+            "SECFORGE_EVIDENCE", "evidence_ledger.jsonl"
+        )
         self._raw_log_store: RawLogStore | None = None
         self._taxonomy = Taxonomy()
         self._supervisor: SupervisorService | None = None
@@ -164,12 +189,23 @@ class RunService:
         # before a process restart can no longer be cancelled, same as it can no longer be polled.
         self._cancel_events: dict[str, threading.Event] = {}
         self._campaign_cancel: dict[str, threading.Event] = {}
+        self._campaign_limiters: dict[str, EngagementLimiter] = {}
 
     def _findings(self) -> JsonlFindingStore | None:
         return JsonlFindingStore(self._findings_path) if self._findings_path else None
 
     def _assets(self) -> JsonlAssetStore | None:
         return JsonlAssetStore(self._assets_path) if self._assets_path else None
+
+    def _evidence(self) -> EvidenceLedger | None:
+        return EvidenceLedger(self._evidence_path) if self._evidence_path else None
+
+    def evidence_status(self) -> dict:
+        ledger = self._evidence()
+        if ledger is None:
+            return {"enabled": False, "valid": False, "detail": "evidence ledger disabled"}
+        valid, detail = ledger.verify()
+        return {"enabled": True, "valid": valid, "detail": detail}
 
     def assets_summary(self, target: str = "") -> dict:
         """Discovered attack surface (optionally for one target) — backs the recon view."""
@@ -208,13 +244,21 @@ class RunService:
         mode: str = "blackbox",
         project_path: str | None = None,
         scan_mode: str = "standard",
+        vendor: str = "generic",
+        rules_of_engagement: dict | None = None,
     ) -> dict:
-        ctx = SessionContext(
-            domain=domain,
-            question=question,
-            mode=mode,
-            project_path=project_path,
-            scan_mode=scan_mode,
+        # Validate at the service boundary so JSON-shaped vendor/RoE values become the typed
+        # control-plane objects before the Supervisor ever renders them into model context.
+        ctx = SessionContext.model_validate(
+            {
+                "domain": domain,
+                "question": question,
+                "mode": mode,
+                "project_path": project_path,
+                "scan_mode": scan_mode,
+                "vendor": vendor,
+                "rules_of_engagement": rules_of_engagement,
+            }
         )
         return self.supervisor.advise(ctx).model_dump(mode="json")
 
@@ -351,6 +395,7 @@ class RunService:
                 verifier=FindingVerifier(),
                 assets=self._assets(),
                 cancel=cancel,
+                evidence=self._evidence(),
             )
         except Exception as exc:  # noqa: BLE001 - surface to the console, don't lose the run
             run.outcome = "error"
@@ -368,6 +413,7 @@ class RunService:
                 f"pentest actions itself. Set {_AUTONOMOUS_ENV}=1 to re-enable the legacy "
                 "engine, or use POST /supervisor/advise instead."
             )
+        _require_ready_roe(config)
         run = Run(config=config)
         cancel = threading.Event()
         with self._lock:
@@ -444,6 +490,16 @@ class RunService:
         if self._campaign_store is not None:
             self._campaign_store.save(campaign)
 
+    def _campaign_limiter(self, campaign: Campaign) -> EngagementLimiter | None:
+        if campaign.config.rules_of_engagement is None:
+            return None
+        with self._lock:
+            limiter = self._campaign_limiters.get(campaign.id)
+            if limiter is None:
+                limiter = EngagementLimiter(campaign.config.rules_of_engagement)
+                self._campaign_limiters[campaign.id] = limiter
+            return limiter
+
     def _phase_goal(self, campaign: Campaign, phase_index: int) -> str:
         """Compose the objective for one phase — recon-first, then progressively deeper."""
         domain = campaign.config.domain
@@ -473,6 +529,7 @@ class RunService:
             model=cfg.model,
             base_url=cfg.base_url,
             authorized_targets=cfg.all_authorized(),
+            rules_of_engagement=cfg.rules_of_engagement,
             opsec_min_interval=cfg.opsec_min_interval,
             opsec_jitter=cfg.opsec_jitter,
         )
@@ -513,6 +570,8 @@ class RunService:
                 verifier=FindingVerifier(),
                 assets=self._assets(),
                 cancel=cancel,
+                evidence=self._evidence(),
+                limiter=self._campaign_limiter(campaign),
             )
         except Exception as exc:  # noqa: BLE001 - surface to the console, don't lose state
             run.outcome = "error"
@@ -542,11 +601,13 @@ class RunService:
         if run.transcript and run.transcript[-1].next_plan:
             campaign.carry_over_plan = run.transcript[-1].next_plan
         # Progress = a new confirmed finding OR a newly surfaced technique. No progress across
-        # consecutive phases ⇒ the target looks well-defended (hardened).
+        # Consecutive phases without new evidence mean only that this budget found nothing new.
         made_progress = bool(new_techs - prev_techs) or new_confirmed > prev_confirmed
         campaign.hardened_streak = 0 if made_progress else campaign.hardened_streak + 1
         campaign.status = (
-            CampaignStatus.hardened if is_hardened(campaign) else CampaignStatus.awaiting_user
+            CampaignStatus.no_new_findings
+            if is_hardened(campaign)
+            else CampaignStatus.awaiting_user
         )
         self._save_campaign(campaign)
 
@@ -554,7 +615,7 @@ class RunService:
         """Autopilot: chain phases with no operator pause until a stop condition.
 
         Runs one phase after another on this worker thread, stopping when the target looks
-        ``hardened``, the operator ``stopped`` it, a phase ``error``ed, or the ``max_phases``
+        no-new-findings, the operator ``stopped`` it, a phase ``error``ed, or the ``max_phases``
         budget is spent (→ ``completed``). This is what makes a single request drive the whole
         engagement end to end.
         """
@@ -563,6 +624,7 @@ class RunService:
             if campaign.status in (
                 CampaignStatus.stopped,
                 CampaignStatus.error,
+                CampaignStatus.no_new_findings,
                 CampaignStatus.hardened,
             ):
                 return
@@ -578,6 +640,14 @@ class RunService:
                 f"locked pending a redesign. Set {_AUTONOMOUS_ENV}=1 to re-enable the legacy "
                 "engine, or use POST /supervisor/advise instead."
             )
+        _require_ready_roe(
+            RunConfig(
+                goal="authorized campaign preflight",
+                target=config.target_url(),
+                authorized_targets=config.all_authorized(),
+                rules_of_engagement=config.rules_of_engagement,
+            )
+        )
         campaign = Campaign(config=config)
         # Seed the map with the one lead we always start from: reconnaissance.
         campaign.coverage = [
@@ -603,7 +673,7 @@ class RunService:
 
         This backs ``POST /pentest`` — the "just give it an address" surface. The caller supplies
         only the target (domain/URL); recon-first phase goals and the coverage map are generated
-        automatically, and the run drives itself to ``hardened``/``completed`` with no more input.
+        automatically, and the run drives itself to no-new-findings/``completed``.
         """
         auto = config.model_copy(update={"autopilot": True})
         return self.start_campaign(auto)
@@ -612,6 +682,7 @@ class RunService:
         campaign = self._get_campaign_obj(campaign_id)
         if campaign is None or campaign.status not in (
             CampaignStatus.awaiting_user,
+            CampaignStatus.no_new_findings,
             CampaignStatus.hardened,
         ):
             return False
@@ -644,7 +715,21 @@ class RunService:
         )
         if approval is None or approval.status != ApprovalStatus.pending:
             return False
-        ctx = ToolContext(authorized_targets=campaign.config.all_authorized())
+        roe = campaign.config.rules_of_engagement
+        ctx = ToolContext(
+            authorized_targets=campaign.config.all_authorized(),
+            rules_of_engagement=roe,
+            primary_target=campaign.config.target_url(),
+            limiter=self._campaign_limiter(campaign),
+            audit=self._evidence(),
+            run_id=campaign.id,
+        )
+        if roe is not None:
+            tool = self._registry.get(approval.tool_call.name)
+            request = action_request_for_tool(approval.tool_call, tool, ctx.primary_target)
+            decision = evaluate_action(roe, request, primary_target=ctx.primary_target)
+            token = approval_token_for_call(approval.tool_call, decision)
+            ctx.approved_action_tokens.add(token)
         Pacer(campaign.config.opsec_min_interval, campaign.config.opsec_jitter).wait(
             campaign.config.domain
         )

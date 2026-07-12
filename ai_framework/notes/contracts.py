@@ -9,7 +9,7 @@ findings are curated, exportable, and ordered by severity, per ``ai_framework/no
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -41,6 +41,22 @@ class Severity(IntEnum):
             return cls.info
 
 
+class FindingStatus(StrEnum):
+    draft = "draft"
+    reproduced = "reproduced"
+    reviewed = "reviewed"
+    accepted_risk = "accepted_risk"
+    fixed = "fixed"
+    retest_passed = "retest_passed"
+    retest_failed = "retest_failed"
+
+
+class Confidence(StrEnum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
 class Finding(BaseModel):
     """One structured, reviewable result captured during a run."""
 
@@ -54,6 +70,18 @@ class Finding(BaseModel):
     evidence: str = ""
     kb_ref: str = ""
     tags: list[str] = Field(default_factory=list)
+    status: FindingStatus = FindingStatus.draft
+    confidence: Confidence = Confidence.low
+    cvss_score: float | None = Field(default=None, ge=0.0, le=10.0)
+    cvss_vector: str = ""
+    cwe: list[str] = Field(default_factory=list)
+    owasp: str = ""
+    wstg: list[str] = Field(default_factory=list)
+    attack: list[str] = Field(default_factory=list)
+    affected_assets: list[str] = Field(default_factory=list)
+    remediation_owner: str = ""
+    reviewed_by: str = ""
+    retest_note: str = ""
     # Adversarial verification: a finding is only trustworthy once its repro has been replayed
     # and confirmed. ``verified`` stays False until a verifier reproduces it; ``verification``
     # holds the human-readable outcome (what was replayed and what came back).

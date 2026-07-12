@@ -27,6 +27,7 @@ def _isolate_usage_store(tmp_path, monkeypatch) -> None:
     without injecting a UsageStore it would otherwise write ai_usage.json into the repo root.
     """
     monkeypatch.setenv("SECFORGE_USAGE", str(tmp_path / "ai_usage.json"))
+    monkeypatch.setenv("SECFORGE_EVIDENCE", str(tmp_path / "evidence_ledger.jsonl"))
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +38,7 @@ def _enable_legacy_autonomous_engine(monkeypatch) -> None:
     enabled for the whole suite; ``test_autonomous_gate.py`` overrides this to verify the
     off-by-default behavior itself."""
     monkeypatch.setenv("SECFORGE_ENABLE_AUTONOMOUS", "1")
+    monkeypatch.setenv("SECFORGE_REQUIRE_ROE", "0")
 
 
 @pytest.fixture

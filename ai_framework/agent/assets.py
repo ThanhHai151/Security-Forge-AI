@@ -12,11 +12,14 @@ the memory and findings stores.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+from ai_framework.security.redaction import redact_data
 
 ASSET_KINDS = ("endpoint", "param", "form", "tech", "host", "subdomain", "cookie", "other")
 
@@ -49,7 +52,7 @@ class JsonlAssetStore:
     def write(self, asset: Asset) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(asset.model_dump_json() + "\n")
+            fh.write(json.dumps(redact_data(asset.model_dump(mode="json"))) + "\n")
 
     def all(self) -> list[Asset]:
         if not self.path.exists():

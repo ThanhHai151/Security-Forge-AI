@@ -36,12 +36,14 @@ from ai_framework.agent.guardrails import GuardrailController
 from ai_framework.agent.opsec import Pacer
 from ai_framework.agent.system import build_system_prompt, with_memory, with_plan
 from ai_framework.agent.verify import FindingVerifier
+from ai_framework.evidence import EvidenceLedger
+from ai_framework.harness.limits import EngagementLimiter
 from ai_framework.headroom import TurnRequest, fit
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
-from ai_framework.notes.contracts import Finding, Severity
+from ai_framework.notes.contracts import Confidence, Finding, FindingStatus, Severity
 from ai_framework.notes.store import JsonlFindingStore
-from ai_framework.tools.base import ToolContext, ToolRegistry, tool_is_mutating
+from ai_framework.tools.base import ToolContext, ToolRegistry, require_authorized, tool_is_mutating
 from ai_framework.tools.session import HttpSession
 
 # Top-K recalled into context when Headroom is off (Headroom uses budget.memory_recall_k).
@@ -80,6 +82,11 @@ def _record_finding(
     repro = args.get("repro")
     if isinstance(repro, dict) and repro and verifier is not None:
         verified, verification = verifier.verify(repro, ctx)
+    kb_ref = str(args.get("kb_ref", ""))
+    tags = [str(t) for t in (args.get("tags") or [])]
+    from vuln_search.mapping import mapping_for
+
+    mapping = mapping_for(kb_ref or next((tag for tag in tags if mapping_for(tag)["cwe"]), ""))
     findings.write(
         Finding(
             run_id=run.id,
@@ -89,8 +96,18 @@ def _record_finding(
             detail=str(args.get("detail", "")),
             severity=Severity.parse(args.get("severity")),
             evidence=str(args.get("evidence", "")),
-            kb_ref=str(args.get("kb_ref", "")),
-            tags=[str(t) for t in (args.get("tags") or [])],
+            kb_ref=kb_ref,
+            tags=tags,
+            status=FindingStatus.reproduced if verified else FindingStatus.draft,
+            confidence=Confidence.high if verified else Confidence.low,
+            cvss_score=args.get("cvss_score"),
+            cvss_vector=str(args.get("cvss_vector", "")),
+            cwe=[str(x) for x in (args.get("cwe") or mapping["cwe"])],
+            owasp=str(args.get("owasp") or mapping["owasp"]),
+            wstg=[str(x) for x in (args.get("wstg") or mapping["wstg"])],
+            attack=[str(x) for x in (args.get("attack") or mapping["attack"])],
+            affected_assets=[str(x) for x in (args.get("affected_assets") or [])],
+            remediation_owner=str(args.get("remediation_owner", "")),
             verified=verified,
             verification=verification,
         )
@@ -134,6 +151,8 @@ def run_loop(
     verifier: FindingVerifier | None = None,
     assets: JsonlAssetStore | None = None,
     cancel: threading.Event | None = None,
+    evidence: EvidenceLedger | None = None,
+    limiter: EngagementLimiter | None = None,
 ) -> Run:
     tools = registry.schemas()
     base_system = build_system_prompt(config, tools)
@@ -141,12 +160,35 @@ def run_loop(
         base_system = f"{base_system}\n\n{system_addon}"
     # One session per run: cookies established by `login` persist across every later tool, and
     # the OPSEC proxy / User-Agent from the config are applied to all network traffic.
-    session = HttpSession(user_agent=config.user_agent, proxy=config.proxy)
-    ctx = ToolContext(authorized_targets=config.authorized_targets, session=session)
+    ctx = ToolContext(
+        authorized_targets=config.authorized_targets,
+        rules_of_engagement=config.rules_of_engagement,
+        primary_target=config.target,
+        limiter=limiter
+        or (
+            EngagementLimiter(config.rules_of_engagement)
+            if config.rules_of_engagement is not None
+            else None
+        ),
+        audit=evidence,
+    )
+
+    def validate_redirect(url: str) -> None:
+        require_authorized(url, ctx)
+
+    session = HttpSession(
+        user_agent=config.user_agent,
+        proxy=config.proxy,
+        # urllib follows redirects internally. Re-apply the same scope gate to every hop so an
+        # in-scope URL cannot silently bounce the agent into an excluded/off-scope host.
+        redirect_validator=validate_redirect,
+    )
+    ctx.session = session
     target_host = urlparse(config.target).hostname or config.target
     # Accept a caller-owned Run so an async service can poll its transcript as it grows.
     if run is None:
         run = Run(config=config)
+    ctx.run_id = run.id
 
     for i in range(config.step_budget):
         if cancel is not None and cancel.is_set():

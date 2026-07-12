@@ -46,31 +46,13 @@ def resolve_scan_mode(scan_mode: str | None) -> str:
     mode = (scan_mode or "").strip().lower()
     return mode if mode in SCAN_MODE_STEP_BUDGET else DEFAULT_SCAN_MODE
 
-# Skill directory -> taxonomy technique node id(s). Explicit and small (13 bundled skills)
-# beats fuzzy matching on tags/subdomain, which drift today (e.g. exploiting-xss's
-# frontmatter tags "injection" even though the catalog groups XSS under Client-side).
-SKILL_TAXONOMY_MAP: dict[str, tuple[str, ...]] = {
-    "attacking-authentication": ("broken_authentication",),
-    "attacking-jwt": ("jwt",),
-    "exploiting-command-injection": ("os_command_injection",),
-    "exploiting-deserialization": ("insecure_deserialization",),
-    "exploiting-file-upload": ("file_upload",),
-    "exploiting-idor": ("broken_access_control",),
-    "exploiting-sql-injection": ("sql_injection", "nosql_injection"),
-    "exploiting-ssrf": ("ssrf",),
-    "exploiting-ssti": ("ssti",),
-    "exploiting-xss": ("xss", "dom_based"),
-    "exploiting-xxe": ("xxe",),
-}
-
-
 def skills_for_node(node_id: str, registry: SkillRegistry) -> list[Skill]:
-    by_dir = {s.dir: s for s in registry.skills()}
-    return [
-        by_dir[dir_name]
-        for dir_name, node_ids in SKILL_TAXONOMY_MAP.items()
-        if node_id in node_ids and dir_name in by_dir
-    ]
+    """Resolve a taxonomy node through the skill's catalog link.
+
+    One catalog entry now has one skill, so the manifest itself is the source of truth and a
+    second hand-maintained mapping cannot silently drift.
+    """
+    return [skill for skill in registry.skills() if skill.catalog_slug() == node_id]
 
 
 def _status_rank(status: NodeStatus) -> int:
@@ -101,7 +83,9 @@ def rank_technique_nodes(
         # notebook status / archetype boosting still produce a sensible general order.
         matched = [n.id for n in taxonomy.technique_nodes()]
     matched_set = set(matched)
-    boosted = set(archetype.priority_nodes) if archetype else set()
+    boosted_order = archetype.priority_nodes if archetype else ()
+    boosted = set(boosted_order)
+    boosted_rank = {node_id: index for index, node_id in enumerate(boosted_order)}
     # Whitebox: let the source itself surface techniques the question never named (so a raw
     # SQL endpoint or an auth flaw shows up even if the operator only asked about something
     # else). Blackbox leaves this empty — there's no local source to scan.
@@ -117,7 +101,7 @@ def rank_technique_nodes(
             high_impact_rank.get(node_id, len(HIGH_IMPACT_NODES)) if is_quick else 0,
             0 if node_id in matched_set else 1,  # question-named techniques lead
             -source_hits.get(node_id, 0),  # then strongest source signal (whitebox)
-            0 if node_id in boosted else 1,  # then archetype-boosted
+            boosted_rank.get(node_id, len(boosted_order)),  # then archetype priority order
             _status_rank(_node_status(notebook, node_id)),
             matched.index(node_id) if node_id in matched else len(matched),
         )

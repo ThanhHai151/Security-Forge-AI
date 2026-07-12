@@ -147,6 +147,7 @@ def test_backend_advise_forwards_scan_mode(tmp_path):
     )
     result = service.advise(domain="svc.example.test", question="sql injection", scan_mode="quick")
     assert "quick (time-boxed" in result["context_block"]
+    assert result["questions"] and result["questions"][0]["technique"] == "sql_injection"
     default = service.advise(domain="svc2.example.test", question="sql injection")
     assert "standard (balanced" in default["context_block"]
 

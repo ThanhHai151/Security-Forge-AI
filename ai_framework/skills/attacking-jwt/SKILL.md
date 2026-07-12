@@ -21,11 +21,22 @@ The app issues a JWT (Authorization: Bearer / cookie); the token's header shows 
 - A session established via `login`/`set_auth` if the surface is authenticated.
 - The candidate input/endpoint identified during recon (track it with `record_asset`).
 
+## Reasoning Questions
+- [surface] Where is the JWT issued, refreshed, revoked, and accepted, and which endpoint gives a harmless authorization oracle?
+- [fingerprint | if a JWT is present] What are its `alg`, `kid`, key-source headers, issuer, audience, subject, roles, and expiry semantics?
+- [branch | if the header algorithm can be changed] Does verification explicitly reject an unsigned `alg:"none"` token rather than trusting the token header?
+- [branch | if HMAC or key-reference headers are used] Are weak HMAC secrets, asymmetric-to-HMAC confusion, or untrusted `kid`/`jku`/`x5u` key selection plausible for this implementation?
+- [validation | if a signing or claim-validation weakness is supported] Does one locally forged, non-destructive token change access at the harmless oracle while an invalid-signature control is rejected?
+- [impact | if forged access is confirmed] Which single claim or scoped read demonstrates the authorization boundary without modifying data?
+
 ## Workflow
-1. Decode the token (`jwt_attack op=decode`) and read header + claims.
-2. Try `alg-none` forge with an escalated claim; replay it via `set_auth`+`http_request`.
-3. Try `crack-hs256` against the weak-secret list; if cracked, `forge-hs256` a new token.
-4. Test `kid`/`jku`/`x5u` header injection where present.
+1. Decode the token (`jwt_attack op=decode`) and record header, registered claims, and the endpoint that verifies it.
+2. Establish controls: replay the original token, a one-byte-corrupted signature, and an expired/audience-mismatched token where safe.
+3. If the implementation signals justify it, forge `alg-none` locally and replay it only against a read-only authorization oracle.
+4. For HS256, test only a small authorized weak-secret set; if a secret is proven, use `forge-hs256` with the minimum changed claim.
+5. Test asymmetric/HMAC confusion only when the public key and accepted algorithm family are known; never assume the token header controls server policy.
+6. Test `kid`/`jku`/`x5u` only when the header is accepted and scope permits the referenced key source.
+7. Record the original, negative control, forged token, and response delta; a decodable token alone is not a finding.
 
 ## Representative payloads
 - `alg:none unsigned token`

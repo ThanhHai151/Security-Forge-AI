@@ -11,10 +11,11 @@ taxonomy techniques, so a domain with a long history still costs only a few line
 
 from __future__ import annotations
 
+from ai_framework.harness.contracts import HarnessBundle
 from ai_framework.notebook.contracts import NodeStatus, Notebook
 from ai_framework.research.archetype import ArchetypeHeuristic
 from ai_framework.skills.loader import Skill, SkillRegistry
-from ai_framework.supervisor.contracts import PlanStep, SkillRef
+from ai_framework.supervisor.contracts import LogicalQuestion, PlanStep, SkillRef
 from ai_framework.supervisor.strategy import resolve_scan_mode
 from ai_framework.taxonomy.tree import Taxonomy
 
@@ -156,11 +157,16 @@ def render_context_block(
     taxonomy: Taxonomy | None = None,
     notebook: Notebook | None = None,
     archetype: ArchetypeHeuristic | None = None,
+    questions: list[LogicalQuestion] | None = None,
+    harness: HarnessBundle | None = None,
     locale: str = "en",
     scan_mode: str = "standard",
     mode: str = "blackbox",
 ) -> str:
-    lines: list[str] = ["# Expert Supervisor briefing", ""]
+    lines: list[str] = []
+    if harness is not None:
+        lines.extend([harness.context_block, "", "---", ""])
+    lines.extend(["# Expert Supervisor technique briefing", ""])
     lines.append(_render_scan_mode(scan_mode))
     lines.append("")
 
@@ -174,6 +180,19 @@ def render_context_block(
         for step in plan:
             lines.append(f"{step.order}. {step.action} — {step.reasoning}")
         lines.append("")
+        if questions:
+            lines.append("## Evidence-led reasoning questions")
+            lines.append(
+                "Answer these from logs/source in order. Treat each answer as a hypothesis "
+                "decision: if its condition is false, prune that branch; never invent an "
+                "answer. Prefer a paired control and the least-impactful proof."
+            )
+            for item in questions:
+                condition = "" if item.condition == "always" else f" (condition: {item.condition})"
+                lines.append(
+                    f"{item.order}. [{item.technique} · {item.stage}] {item.question}{condition}"
+                )
+            lines.append("")
         lines.append(_render_methodology(scan_mode, mode))
         lines.append("")
     if selected_skills:

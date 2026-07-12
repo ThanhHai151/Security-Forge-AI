@@ -2,7 +2,7 @@
 
 from ai_framework.agent.contracts import RunConfig, ToolCall
 from ai_framework.agent.system import build_system_prompt
-from ai_framework.skills.loader import SkillRegistry, _parse_frontmatter
+from ai_framework.skills.loader import SkillRegistry, _parse_frontmatter, _questions
 from ai_framework.tools.base import ToolContext, ToolRegistry
 from ai_framework.tools.skills_tool import LoadSkillTool
 
@@ -41,6 +41,21 @@ def test_frontmatter_parses_folded_scalar_and_lists():
     assert "## Workflow" in body
 
 
+def test_reasoning_question_dsl_parses_stage_condition_and_question():
+    body = """## Reasoning Questions
+- [surface] Where is the input accepted?
+- [fingerprint | if a signal exists] Which database engine is supported by evidence?
+
+## Workflow
+1. Continue.
+"""
+    parsed = _questions(body)
+    assert [q.stage for q in parsed] == ["surface", "fingerprint"]
+    assert parsed[0].condition == "always"
+    assert parsed[1].condition == "if a signal exists"
+    assert parsed[1].question.endswith("evidence?")
+
+
 def test_registry_discovers_and_builds_catalog(tmp_path):
     _skill_dir(tmp_path, "demo-skill", _SYNTHETIC)
     reg = SkillRegistry(tmp_path)
@@ -62,6 +77,14 @@ def test_load_and_vi_fallback(tmp_path):
     # A skill with no VI sibling falls back to the English manifest, never errors.
     assert "## Workflow" in (reg.load("en-only", "vi") or "")
     assert reg.load("nope") is None
+
+
+def test_reasoning_questions_fall_back_to_canonical_manifest(tmp_path):
+    canonical = _SYNTHETIC + "\n## Reasoning Questions\n- [surface] What exists?\n"
+    _skill_dir(tmp_path, "demo-skill", canonical)
+    (tmp_path / "demo-skill" / "SKILL.vi.md").write_text("chưa dịch", encoding="utf-8")
+    questions = SkillRegistry(tmp_path).questions("demo-skill", "vi")
+    assert len(questions) == 1 and questions[0].question == "What exists?"
 
 
 def test_skill_exposes_taxonomy_fields_from_bundled_manifest():

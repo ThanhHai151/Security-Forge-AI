@@ -37,6 +37,13 @@ def test_missing_playwright_degrades_gracefully():
     assert "not installed" in out.lower()
 
 
+def test_host_browser_is_blocked_without_an_isolated_renderer(monkeypatch):
+    monkeypatch.delenv("SECFORGE_ALLOW_HOST_BROWSER", raising=False)
+    ctx = ToolContext(authorized_targets={"example.com"})
+    out = TOOL.run({"url": "https://example.com"}, ctx)
+    assert "no isolated browser renderer" in out.lower()
+
+
 def test_render_failure_is_caught():
     def boom(url, wait_ms):
         raise RuntimeError("navigation timeout")

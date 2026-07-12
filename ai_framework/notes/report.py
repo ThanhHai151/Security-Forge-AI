@@ -72,7 +72,9 @@ def render_markdown(
         return "\n".join(lines)
     for i, f in enumerate(ranked, 1):
         badge = " ✅ verified" if f.verified else " ⚠️ unverified"
-        lines.append(f"### {i}. {f.title} — {f.severity.name.upper()}{badge}")
+        lines.append(
+            f"### {i}. {f.title} — {f.severity.name.upper()}{badge} [{f.status.value}]"
+        )
         lines.append("")
         if f.detail:
             lines.append(f.detail)
@@ -101,6 +103,21 @@ def render_markdown(
             meta.append(f"see KB: {f.kb_ref}")
         if f.tags:
             meta.append("tags: " + ", ".join(f.tags))
+        meta.append(f"confidence: {f.confidence.value}")
+        if f.cvss_score is not None:
+            meta.append(f"CVSS: {f.cvss_score:.1f}")
+        if f.cvss_vector:
+            meta.append(f"vector: {f.cvss_vector}")
+        if f.cwe:
+            meta.append("CWE: " + ", ".join(f.cwe))
+        if f.wstg:
+            meta.append("WSTG: " + ", ".join(f.wstg))
+        if f.attack:
+            meta.append("ATT&CK: " + ", ".join(f.attack))
+        if f.affected_assets:
+            meta.append("assets: " + ", ".join(f.affected_assets))
+        if f.remediation_owner:
+            meta.append(f"owner: {f.remediation_owner}")
         if meta:
             lines.append("_" + " · ".join(meta) + "_")
             lines.append("")

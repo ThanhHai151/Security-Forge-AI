@@ -17,9 +17,11 @@ it via :func:`session_of`. Stdlib-only; no dependency.
 from __future__ import annotations
 
 import http.cookiejar
+from collections.abc import Callable
 from typing import Any
 from urllib.request import (
     HTTPCookieProcessor,
+    HTTPRedirectHandler,
     OpenerDirector,
     ProxyHandler,
     Request,
@@ -27,6 +29,20 @@ from urllib.request import (
 )
 
 DEFAULT_UA = "SecForge/1.0 (+authorized-engagement)"
+
+
+class ScopedRedirectHandler(HTTPRedirectHandler):
+    """Re-check scope before urllib follows a redirect to a new URL."""
+
+    def __init__(self, validator: Callable[[str], None]) -> None:
+        super().__init__()
+        self._validator = validator
+
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> Any:
+        self._validator(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 class HttpSession:
@@ -37,15 +53,19 @@ class HttpSession:
         user_agent: str | None = None,
         proxy: str | None = None,
         default_headers: dict[str, str] | None = None,
+        redirect_validator: Callable[[str], None] | None = None,
     ) -> None:
         self.jar = http.cookiejar.CookieJar()
         self.user_agent = user_agent or DEFAULT_UA
         self.proxy = (proxy or "").strip()
         self.default_headers = dict(default_headers or {})
+        self.redirect_validator = redirect_validator
         self._opener = self._build_opener()
 
     def _build_opener(self) -> OpenerDirector:
         handlers: list[Any] = [HTTPCookieProcessor(self.jar)]
+        if self.redirect_validator is not None:
+            handlers.append(ScopedRedirectHandler(self.redirect_validator))
         if self.proxy:
             handlers.append(ProxyHandler({"http": self.proxy, "https": self.proxy}))
         opener = build_opener(*handlers)

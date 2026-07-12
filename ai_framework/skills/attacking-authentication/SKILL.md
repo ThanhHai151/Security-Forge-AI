@@ -21,6 +21,13 @@ A login/reset flow with no rate limit or MFA; verbose 'user not found' vs 'bad p
 - A session established via `login`/`set_auth` if the surface is authenticated.
 - The candidate input/endpoint identified during recon (track it with `record_asset`).
 
+## Reasoning Questions
+- [surface] Which login, registration, recovery, MFA, and logout flows establish or change identity?
+- [control | if an authentication flow exists] Do paired valid and invalid attempts differ in body, status, timing, or rate-limit behavior?
+- [validation | if a session can be established] Does the session identifier rotate after login, privilege change, password reset, and logout?
+- [impact | if a control is missing] What is the smallest authorized account set that proves enumeration, replay, fixation, or weak recovery without broad guessing?
+- [remediation | if source or configuration is available] Where should uniform errors, throttling, MFA, token entropy, and session rotation be enforced?
+
 ## Workflow
 1. Enumerate valid users via response/timing differences.
 2. Test lockout/rate-limit with a small, authorized credential set (never mass attacks).

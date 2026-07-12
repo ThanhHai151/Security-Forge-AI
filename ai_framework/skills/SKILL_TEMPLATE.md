@@ -10,8 +10,8 @@ owasp: [<A03:2021-Injection>]
 version: "0.1"
 author: secforge
 license: Apache-2.0
-catalog: ../../vuln_search/catalog/<slug>/README.md
-deep_dive: ../../../Troubleshooting_Guide/<file>.md
+catalog: ../../../vuln_search/catalog/<slug>/README.md
+deep_dive: ../../../../Troubleshooting_Guide/<file>.md
 ---
 
 **Languages:** English · [Tiếng Việt](SKILL.vi.md)
@@ -21,6 +21,13 @@ Trigger conditions — the observation(s) during a run that should activate this
 
 ## Prerequisites
 Tools, access, and the authorization required (target must be in `RunConfig.authorized_targets`).
+
+## Reasoning Questions
+- [surface] Which concrete input, endpoint, or trust boundary activates this class?
+- [context | if the surface exists] Which implementation details decide the correct test branch?
+- [control] What paired positive/negative baseline can reject a false positive?
+- [validation | if evidence supports the hypothesis] What least-impactful proof confirms it?
+- [impact | if validation succeeds] What minimum evidence demonstrates real impact?
 
 ## Workflow
 1. Ordered, concrete steps with the actual commands/requests.

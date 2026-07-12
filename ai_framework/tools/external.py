@@ -19,10 +19,12 @@ authorized-engagement capability — the scope gate is the guardrail.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess  # noqa: S404 - argv is built here (no shell); hosts are scope-gated
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -57,10 +59,11 @@ def _extra(opts: dict[str, Any]) -> list[str]:
     raw = opts.get("extra_args") or []
     if not isinstance(raw, list):
         raise ValueError("extra_args must be a list of strings")
-    out = [str(a) for a in raw]
-    if any(len(a) > 512 for a in out) or len(out) > 40:
-        raise ValueError("extra_args too large")
-    return out
+    if raw:
+        raise PermissionError(
+            "arbitrary extra_args are disabled; add a typed, reviewed preset option instead"
+        )
+    return []
 
 
 def _wordlist(opts: dict[str, Any]) -> str:
@@ -79,16 +82,16 @@ PRESETS: dict[str, Preset] = {
     "wafw00f": Preset("wafw00f", lambda t, o: ["wafw00f", t, *_extra(o)],
                       summary="detect a WAF in front of the site"),
     "nmap": Preset("nmap", lambda t, o: ["nmap", "-sV", "-T3", _host_of(t), *_extra(o)],
-                   summary="service/version scan of a host"),
+                   mutating=True, summary="active service/version scan of a host"),
     "naabu": Preset("naabu", lambda t, o: ["naabu", "-silent", "-host", _host_of(t), *_extra(o)],
-                    summary="fast port scan of a host"),
+                    mutating=True, summary="active port scan of a host"),
     "subfinder": Preset(
         "subfinder", lambda t, o: ["subfinder", "-silent", "-d", _host_of(t), *_extra(o)],
         summary="passive subdomain enumeration of an authorized apex domain"),
     "dnsx": Preset("dnsx", lambda t, o: ["dnsx", "-silent", "-d", _host_of(t), *_extra(o)],
                    summary="DNS resolution/records for a domain"),
     "katana": Preset("katana", lambda t, o: ["katana", "-silent", "-u", t, *_extra(o)],
-                     summary="crawl a site for endpoints (read-only)"),
+                     mutating=True, summary="active crawl of a site for endpoints"),
     "nuclei": Preset(
         "nuclei", lambda t, o: ["nuclei", "-silent", "-u", t, *_extra(o)], mutating=True,
         summary="active template-based vulnerability scan"),
@@ -124,6 +127,17 @@ def _gate_hosts(argv: list[str], ctx: ToolContext) -> None:
             require_authorized_host(tok, ctx)
 
 
+def _require_confined_wordlist(args: dict[str, Any], ctx: ToolContext) -> None:
+    if not args.get("wordlist"):
+        return
+    if not ctx.workspace:
+        raise PermissionError("wordlists require a configured isolated workspace")
+    root = Path(ctx.workspace).resolve()
+    path = Path(str(args["wordlist"])).expanduser().resolve()
+    if root not in path.parents or not path.is_file():
+        raise PermissionError("wordlist must be a regular file inside the isolated workspace")
+
+
 class ExternalReconTool:
     name = "run_recon"
     description = (
@@ -149,7 +163,7 @@ class ExternalReconTool:
                 "wordlist": {"type": "string", "description": "Path to a wordlist (ffuf/gobuster)"},
                 "extra_args": {
                     "type": "array", "items": {"type": "string"},
-                    "description": "Extra CLI flags (no shell; off-scope hosts are rejected)",
+                    "description": "Deprecated and rejected; use typed preset options.",
                 },
             },
             "required": ["tool", "target"],
@@ -164,10 +178,16 @@ class ExternalReconTool:
         if not target:
             raise ValueError("target is required")
         require_authorized_host(_host_of(target), ctx)  # gate the primary target first
+        _require_confined_wordlist(args, ctx)
         argv = preset.build(target, args)
         _gate_hosts(argv, ctx)  # then gate any host smuggled via extra_args
 
         runner: Runner = ctx.runner or _default_runner
+        if ctx.runner is None and os.getenv("SECFORGE_ALLOW_HOST_TOOLS", "") != "1":
+            return (
+                f"[{tool}] blocked: no isolated tool runner is configured. "
+                "Set ToolContext.runner to a container/VM runner; host execution is disabled."
+            )
         if ctx.runner is None and shutil.which(preset.binary) is None:
             return (
                 f"[{tool}] not installed — install it to run this scan, or use the built-in "

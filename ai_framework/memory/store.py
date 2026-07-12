@@ -7,9 +7,11 @@ loop's context. ``has_failed_attempt`` backs the anti-loop guard. See §2.4 and 
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ai_framework.agent.contracts import MemoryKind, MemoryRecord
+from ai_framework.security.redaction import redact_data
 
 
 class JsonlMemoryStore:
@@ -19,7 +21,7 @@ class JsonlMemoryStore:
     def write(self, record: MemoryRecord) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(record.model_dump_json() + "\n")
+            fh.write(json.dumps(redact_data(record.model_dump(mode="json"))) + "\n")
 
     def all(self) -> list[MemoryRecord]:
         if not self.path.exists():

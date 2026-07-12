@@ -9,6 +9,7 @@ description = "Local security-research platform: Hermes-style agent loop, memory
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "cryptography>=44",
     "pydantic>=2.6",
 ]
 

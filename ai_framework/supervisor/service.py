@@ -9,11 +9,13 @@ keeps the new advisory flow architecturally separate from the legacy autonomous 
 
 from __future__ import annotations
 
+from ai_framework.harness import build_harness
 from ai_framework.notebook.store import NotebookStore
 from ai_framework.research.archetype import ArchetypeStore
 from ai_framework.skills.loader import Skill, SkillRegistry
 from ai_framework.supervisor import assemble, strategy
 from ai_framework.supervisor.contracts import Advice, SessionContext
+from ai_framework.supervisor.questions import build_logical_questions
 from ai_framework.taxonomy.tree import Taxonomy
 
 
@@ -53,14 +55,33 @@ class SupervisorService:
                 if skill.name not in {s.name for s in selected}:
                     selected.append(skill)
 
+        questions = build_logical_questions(plan, selected, self.skills, ctx.scan_mode)
+        harness = build_harness(
+            primary_target=ctx.domain,
+            roe=ctx.rules_of_engagement,
+            vendor=ctx.vendor,
+            scan_mode=ctx.scan_mode,
+            assessment_mode=ctx.mode,
+        )
+
         context_block = assemble.render_context_block(
-            plan, selected, self.skills, taxonomy=self.taxonomy, notebook=notebook,
-            archetype=archetype, scan_mode=ctx.scan_mode, mode=ctx.mode,
+            plan,
+            selected,
+            self.skills,
+            taxonomy=self.taxonomy,
+            notebook=notebook,
+            archetype=archetype,
+            questions=questions,
+            harness=harness,
+            scan_mode=ctx.scan_mode,
+            mode=ctx.mode,
         )
         return Advice(
             domain=ctx.domain,
             archetype=archetype.archetype if archetype else "",
             plan=plan,
             skills=assemble.to_skill_refs(selected),
+            questions=questions,
+            harness=harness,
             context_block=context_block,
         )

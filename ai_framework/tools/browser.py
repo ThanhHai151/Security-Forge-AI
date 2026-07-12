@@ -15,6 +15,8 @@ Read-only: it navigates and returns the DOM/console; it does not submit forms on
 
 from __future__ import annotations
 
+import os
+from collections.abc import Callable
 from typing import Any
 
 from ai_framework.tools.base import ToolContext, require_authorized
@@ -23,14 +25,29 @@ _MAX_HTML = 12000
 _DEFAULT_WAIT_MS = 1500
 
 
-def _playwright_render(url: str, wait_ms: int) -> str:
+def _playwright_render(
+    url: str, wait_ms: int, scope_validator: Callable[[str], None]
+) -> str:
     """Render with headless Chromium. Raises ImportError if Playwright isn't installed."""
     from playwright.sync_api import sync_playwright  # lazy: only needed when actually rendering
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
-            page = browser.new_page()
+            context = browser.new_context()
+            blocked: list[str] = []
+
+            def gate(route: Any) -> None:
+                try:
+                    scope_validator(route.request.url)
+                except PermissionError:
+                    blocked.append(route.request.url)
+                    route.abort("blockedbyclient")
+                    return
+                route.continue_()
+
+            context.route("**/*", gate)
+            page = context.new_page()
             page.goto(url, wait_until="networkidle", timeout=30000)
             if wait_ms:
                 page.wait_for_timeout(wait_ms)
@@ -38,7 +55,8 @@ def _playwright_render(url: str, wait_ms: int) -> str:
             html = page.content()
         finally:
             browser.close()
-    return f"<!-- title: {title} -->\n{html}"
+    notice = f"<!-- blocked off-scope requests: {len(blocked)} -->\n" if blocked else ""
+    return f"{notice}<!-- title: {title} -->\n{html}"
 
 
 class BrowserRenderTool:
@@ -66,9 +84,21 @@ class BrowserRenderTool:
         url = args["url"]
         require_authorized(url, ctx)
         wait_ms = int(args.get("wait_ms", _DEFAULT_WAIT_MS))
-        renderer = ctx.renderer or _playwright_render
         try:
-            html = renderer(url, wait_ms)
+            if ctx.renderer is not None:
+                html = ctx.renderer(url, wait_ms)
+            else:
+                if os.getenv("SECFORGE_ALLOW_HOST_BROWSER", "") != "1":
+                    return (
+                        "[browser_render] blocked: no isolated browser renderer is configured. "
+                        "Set ToolContext.renderer to a sandboxed renderer; host browser execution "
+                        "is disabled."
+                    )
+
+                def validate(candidate: str) -> None:
+                    require_authorized(candidate, ctx)
+
+                html = _playwright_render(url, wait_ms, validate)
         except ImportError:
             return (
                 "[browser_render] Playwright not installed — run `pip install -e \".[browser]\"` "

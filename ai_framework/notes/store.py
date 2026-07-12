@@ -8,9 +8,11 @@ findings view.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ai_framework.notes.contracts import Finding
+from ai_framework.security.redaction import redact_data
 
 
 class JsonlFindingStore:
@@ -20,7 +22,7 @@ class JsonlFindingStore:
     def write(self, finding: Finding) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(finding.model_dump_json() + "\n")
+            fh.write(json.dumps(redact_data(finding.model_dump(mode="json"))) + "\n")
 
     def all(self) -> list[Finding]:
         if not self.path.exists():

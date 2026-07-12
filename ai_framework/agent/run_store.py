@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ai_framework.agent.contracts import Run
+from ai_framework.security.redaction import redact_data
 
 
 class JsonRunStore:
@@ -25,7 +26,8 @@ class JsonRunStore:
         self.dir.mkdir(parents=True, exist_ok=True)
         # Write-then-rename so a concurrent reader never sees a half-written file.
         tmp = self._path(run.id).with_suffix(".json.tmp")
-        tmp.write_text(run.model_dump_json(), encoding="utf-8")
+        data = redact_data(run.model_dump(mode="json"))
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self._path(run.id))
 
     def load(self, run_id: str) -> Run | None:
