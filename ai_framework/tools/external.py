@@ -117,14 +117,32 @@ def _default_runner(argv: list[str], timeout: float) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout, proc.stderr
 
 
+def _egress_check(host: str, ctx: ToolContext) -> None:
+    """Resolve-and-validate the host before an external binary connects to it.
+
+    An external CLI does its own DNS, so the socket cannot be pinned the way the in-process HTTP
+    path is. Resolving here and rejecting a private/metadata answer is the strongest available
+    SSRF/rebinding guard for that path — without it an in-scope name pointing at 169.254.169.254
+    would be handed straight to nmap/httpx/nuclei. Honors RoE.allow_private_ranges.
+    """
+    from ai_framework.harness.netguard import EgressPolicy, resolve_and_validate
+
+    roe = ctx.rules_of_engagement
+    policy = EgressPolicy(allow_private=bool(getattr(roe, "allow_private_ranges", False)))
+    resolve_and_validate(host, policy)
+
+
 def _gate_hosts(argv: list[str], ctx: ToolContext) -> None:
-    """Scope-gate every host-like token in the final argv (defense in depth)."""
+    """Scope-gate AND resolve-validate every host-like token in the argv (defense in depth)."""
     for tok in argv[1:]:
         if "://" in tok:
-            require_authorized_host(urlparse(tok).hostname or "", ctx)
+            host = urlparse(tok).hostname or ""
+            require_authorized_host(host, ctx)
+            _egress_check(host, ctx)
         elif "/" not in tok and "." in tok and not tok.startswith("-"):
             # Looks like a bare host/domain (not a flag, not a path). Gate it.
             require_authorized_host(tok, ctx)
+            _egress_check(tok, ctx)
 
 
 def _require_confined_wordlist(args: dict[str, Any], ctx: ToolContext) -> None:

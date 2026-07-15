@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from ai_framework.agent.contracts import MemoryKind, MemoryRecord
+from ai_framework.security.fsutil import open_private_append
 from ai_framework.security.redaction import redact_data
 
 
@@ -20,7 +21,7 @@ class JsonlMemoryStore:
 
     def write(self, record: MemoryRecord) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as fh:
+        with open_private_append(self.path) as fh:
             fh.write(json.dumps(redact_data(record.model_dump(mode="json"))) + "\n")
 
     def all(self) -> list[MemoryRecord]:

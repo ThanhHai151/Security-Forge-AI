@@ -46,6 +46,14 @@ class ToolContext(BaseModel):
     workspace: str = ""  # optional dir for tool output artifacts
 
 
+def _egress_policy(ctx: ToolContext) -> Any:
+    """Egress policy from the RoE (default: deny private/metadata ranges)."""
+    from ai_framework.harness.netguard import EgressPolicy
+
+    roe = ctx.rules_of_engagement
+    return EgressPolicy(allow_private=bool(getattr(roe, "allow_private_ranges", False)))
+
+
 def require_authorized(url: str, ctx: ToolContext) -> str:
     """Return the host, or raise if it is neither localhost nor an authorized target.
 
@@ -68,6 +76,12 @@ def require_authorized_host(host: str, ctx: ToolContext) -> str:
     enumeration of an authorized domain does not trip the gate.
     """
     host = (host or "").strip().lower()
+    # Lexical egress pre-check: reject a host that is (or encodes) a forbidden IP literal or a
+    # metadata name before any scope logic. Real hostnames defer to connect-time resolution in
+    # the guarded opener; the external-CLI path (which does its own DNS) relies on this check.
+    from ai_framework.harness.netguard import guard_host
+
+    guard_host(host, _egress_policy(ctx))
     if ctx.rules_of_engagement is not None:
         from ai_framework.harness.policy import target_is_in_scope
 

@@ -119,6 +119,10 @@ class RulesOfEngagement(BaseModel):
     approval_required_actions: set[ActionClass] = Field(
         default_factory=lambda: set(_DEFAULT_APPROVAL_ACTIONS)
     )
+    # Egress guard: when False (default) the resolve-pin-and-gate guard rejects any target that
+    # resolves to a loopback/link-local/private/ULA/CGNAT/metadata address. Set True only for an
+    # explicitly authorized internal-network engagement.
+    allow_private_ranges: bool = False
     evasion_authorized: bool = False
     credential_use_authorized: bool = False
     state_changes_authorized: bool = False

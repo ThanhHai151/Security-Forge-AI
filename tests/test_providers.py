@@ -268,9 +268,14 @@ def api(tmp_path):
         thread.join()
 
 
+# State-changing API requests must carry a JSON content-type and the CSRF header (see
+# backend/app.py _csrf_ok). The console sends these on every mutating call.
+_CSRF_HEADERS = {"Content-Type": "application/json", "X-SecForge-Client": "test"}
+
+
 def _post(url, body):
     data = json.dumps(body).encode()
-    with urlopen(Request(url, data=data, method="POST")) as resp:
+    with urlopen(Request(url, data=data, method="POST", headers=_CSRF_HEADERS)) as resp:
         return resp.status, json.loads(resp.read())
 
 
@@ -281,7 +286,7 @@ def _get(url):
 
 def _post_patch(url, body):
     data = json.dumps(body).encode()
-    with urlopen(Request(url, data=data, method="PATCH")) as resp:
+    with urlopen(Request(url, data=data, method="PATCH", headers=_CSRF_HEADERS)) as resp:
         return resp.status, json.loads(resp.read())
 
 

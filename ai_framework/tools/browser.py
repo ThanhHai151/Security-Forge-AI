@@ -23,6 +23,26 @@ from ai_framework.tools.base import ToolContext, require_authorized
 
 _MAX_HTML = 12000
 _DEFAULT_WAIT_MS = 1500
+# browser_render is read-only navigation: page JavaScript must not be able to issue a
+# state-changing request (POST/PUT/PATCH/DELETE) to any host, in or out of scope.
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def gate_block_reason(
+    method: str, url: str, scope_validator: Callable[[str], None]
+) -> str:
+    """Decide whether a subresource request should be blocked. "" = allow.
+
+    Pure and testable: a non-GET method is refused regardless of scope (so client-side JS cannot
+    mutate the target through the "read-only" renderer), then the URL is scope-checked.
+    """
+    if str(method or "GET").upper() not in _SAFE_METHODS:
+        return f"blocked state-changing subrequest: {method} {url}"
+    try:
+        scope_validator(url)
+    except PermissionError:
+        return f"blocked off-scope subrequest: {url}"
+    return ""
 
 
 def _playwright_render(
@@ -34,14 +54,20 @@ def _playwright_render(
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
-            context = browser.new_context()
+            # service_workers="block": a service worker's fetches are NOT delivered to the route
+            # handler under Playwright's default, so a page could register one and issue a
+            # state-changing POST that escapes the method gate. Blocking SWs keeps every
+            # subrequest on the intercepted path.
+            context = browser.new_context(service_workers="block")
             blocked: list[str] = []
 
             def gate(route: Any) -> None:
-                try:
-                    scope_validator(route.request.url)
-                except PermissionError:
-                    blocked.append(route.request.url)
+                request = route.request
+                reason = gate_block_reason(
+                    getattr(request, "method", "GET"), request.url, scope_validator
+                )
+                if reason:
+                    blocked.append(reason)
                     route.abort("blockedbyclient")
                     return
                 route.continue_()

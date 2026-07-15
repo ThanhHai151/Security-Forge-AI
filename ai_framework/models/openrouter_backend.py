@@ -19,6 +19,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
+from ai_framework.agent.system import fence_untrusted
 from ai_framework.models.base import ActResponse, normalize_usage
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -99,7 +100,13 @@ class OpenRouterBackend:
                 ]
             messages.append(assistant)
             for tr in turn.tool_results:
-                messages.append({"role": "tool", "tool_call_id": tr.call_id, "content": tr.log})
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tr.call_id,
+                        "content": fence_untrusted(tr.log, empty_placeholder="(no output)"),
+                    }
+                )
         if len(messages) == 1:  # nothing but the system prompt -> seed the goal
             messages.append({"role": "user", "content": f"Begin. Goal: {config.goal}"})
         return messages

@@ -78,7 +78,11 @@ def test_messages_include_prior_tool_results():
     messages = captured["payload"]["messages"]
     assert any(m["role"] == "assistant" and m.get("tool_calls") for m in messages)
     tool_msgs = [m for m in messages if m["role"] == "tool"]
-    assert tool_msgs[0] == {"role": "tool", "tool_call_id": "c1", "content": "200 OK"}
+    # Tool output is fenced as untrusted data before it reaches the provider (taint boundary).
+    assert tool_msgs[0]["role"] == "tool"
+    assert tool_msgs[0]["tool_call_id"] == "c1"
+    assert "200 OK" in tool_msgs[0]["content"]
+    assert "UNTRUSTED_OBSERVED_DATA" in tool_msgs[0]["content"]
 
 
 def test_plan_returns_content():

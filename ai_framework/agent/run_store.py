@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ai_framework.agent.contracts import Run
+from ai_framework.security.fsutil import restrict, write_private_text
 from ai_framework.security.redaction import redact_data
 
 
@@ -27,8 +28,11 @@ class JsonRunStore:
         # Write-then-rename so a concurrent reader never sees a half-written file.
         tmp = self._path(run.id).with_suffix(".json.tmp")
         data = redact_data(run.model_dump(mode="json"))
-        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        # Write the temp owner-only from creation so the run transcript is never briefly readable
+        # by other local users; rename preserves the mode onto the final path.
+        write_private_text(tmp, json.dumps(data, ensure_ascii=False))
         tmp.replace(self._path(run.id))
+        restrict(self._path(run.id))
 
     def load(self, run_id: str) -> Run | None:
         path = self._path(run_id)

@@ -23,7 +23,14 @@ Translator = Callable[[str, str], str]  # (text, target_locale) -> translated te
 
 @cache
 def load_strings(locale: str) -> dict[str, str]:
-    """All UI strings for a locale (``_meta`` stripped). Unknown locale → empty dict."""
+    """All UI strings for a locale (``_meta`` stripped). Unknown/invalid locale → empty dict.
+
+    ``locale`` is untrusted URL input (``GET /i18n/{locale}``). It is checked against the fixed
+    ``LOCALES`` allow-list, never mapped to an arbitrary path — so ``../ai_accounts`` and any
+    other traversal cannot read a file outside the locale set. (ARCHITECTURE.md P0.)
+    """
+    if locale not in LOCALES:
+        return {}
     path = I18N_DIR / f"{locale}.json"
     if not path.is_file():
         return {}

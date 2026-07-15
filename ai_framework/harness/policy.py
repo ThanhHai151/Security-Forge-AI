@@ -129,11 +129,20 @@ def _network(value: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None
 
 
 def _is_hard_denied(value: str) -> bool:
+    from ai_framework.harness.netguard import normalize_host
+
     host = _host(value)
     if host in _HARD_DENIED_HOSTS:
         return True
+    # Canonicalize encoded literals (integer/hex/IPv4-mapped-IPv6) so an obfuscated
+    # metadata/link-local address cannot dodge the deny check. Loopback and private ranges are
+    # NOT hard-denied here (a local lab / staging host is a legitimate authorized target); those
+    # are gated at the egress guard, which honours RoE.allow_private_ranges.
+    canonical = normalize_host(host)
+    if canonical in _HARD_DENIED_HOSTS:
+        return True
     try:
-        ip = ipaddress.ip_address(host)
+        ip = ipaddress.ip_address(canonical)
     except ValueError:
         return False
     return ip.is_link_local or ip.is_multicast or ip.is_unspecified

@@ -190,6 +190,11 @@ class RunService:
         self._cancel_events: dict[str, threading.Event] = {}
         self._campaign_cancel: dict[str, threading.Event] = {}
         self._campaign_limiters: dict[str, EngagementLimiter] = {}
+        # Boot-time crash recovery: a campaign persisted as "running" has no live worker (that
+        # state can't outlive the process), so reconcile any orphan to "interrupted" rather than
+        # leaving it looking live forever. (Full resume-from-checkpoint is future work.)
+        if self._campaign_store is not None:
+            self._campaign_store.reconcile_interrupted()
 
     def _findings(self) -> JsonlFindingStore | None:
         return JsonlFindingStore(self._findings_path) if self._findings_path else None
@@ -366,7 +371,18 @@ class RunService:
         return self._raw_log_store
 
     def _backend_for(self, config: RunConfig) -> Backend:
-        """Resolve the backend: the native rotating router, or a simple named backend."""
+        """Resolve the backend: the native rotating router, or a simple named backend.
+
+        Local-only mode (``RunConfig.local_only`` or ``SECFORGE_LOCAL_ONLY=1``) refuses any
+        remote provider so no target-derived prompt text leaves the host — only the offline
+        backend is permitted.
+        """
+        env_local = os.getenv("SECFORGE_LOCAL_ONLY", "").strip().lower() in {"1", "true", "yes"}
+        if (config.local_only or env_local) and config.backend != "offline":
+            raise PermissionError(
+                "local-only mode is enabled: remote model providers are refused "
+                f"(backend {config.backend!r}); use the offline backend or disable local_only"
+            )
         if config.backend == "router":
             from ai_framework.router.router import RouterBackend
 
@@ -532,6 +548,7 @@ class RunService:
             rules_of_engagement=cfg.rules_of_engagement,
             opsec_min_interval=cfg.opsec_min_interval,
             opsec_jitter=cfg.opsec_jitter,
+            local_only=cfg.local_only,
         )
         run = Run(config=run_config)
         with self._lock:
@@ -585,9 +602,10 @@ class RunService:
         if self._run_store is not None:
             self._run_store.save(run)
 
-        if run.outcome == "stopped":
-            # The operator hit Stop mid-phase — stop_campaign() already set the campaign status;
-            # don't let the coverage/hardened-streak logic below recompute it back to "running".
+        if run.outcome == "stopped" or (cancel is not None and cancel.is_set()):
+            # The operator hit Stop — either the loop broke with outcome "stopped", or the stop
+            # landed just as the phase finished naturally. Either way "stopped" is sticky: don't
+            # let the coverage/hardened-streak logic below recompute it back to a running state.
             campaign.status = CampaignStatus.stopped
             self._save_campaign(campaign)
             return
@@ -679,43 +697,83 @@ class RunService:
         return self.start_campaign(auto)
 
     def continue_campaign(self, campaign_id: str) -> bool:
-        campaign = self._get_campaign_obj(campaign_id)
-        if campaign is None or campaign.status not in (
-            CampaignStatus.awaiting_user,
-            CampaignStatus.no_new_findings,
-            CampaignStatus.hardened,
-        ):
-            return False
-        # Fresh cancel event per resumed phase, so Stop always targets the phase actually running.
-        cancel = threading.Event()
+        # Claim the resume atomically: read status, flip it to running, and register the cancel
+        # event all under one lock so two concurrent continues can't both launch a phase thread,
+        # and a stop that already landed (status=stopped) is refused.
         with self._lock:
+            campaign = self._campaigns.get(campaign_id)
+            if campaign is None and self._campaign_store is not None:
+                campaign = self._campaign_store.load(campaign_id)
+                if campaign is not None:
+                    self._campaigns[campaign_id] = campaign
+            if campaign is None or campaign.status not in (
+                CampaignStatus.awaiting_user,
+                CampaignStatus.no_new_findings,
+                CampaignStatus.hardened,
+                CampaignStatus.interrupted,  # a crashed campaign can be resumed by the operator
+            ):
+                return False
+            campaign.status = CampaignStatus.running  # claim — a concurrent continue now refuses
+            # Fresh cancel event per resumed phase, so Stop targets the phase actually running.
+            cancel = threading.Event()
             self._campaign_cancel[campaign_id] = cancel
+        self._save_campaign(campaign)
         threading.Thread(target=self._run_phase, args=(campaign, cancel), daemon=True).start()
         return True
 
     def stop_campaign(self, campaign_id: str) -> bool:
-        campaign = self._get_campaign_obj(campaign_id)
-        if campaign is None:
-            return False
-        campaign.status = CampaignStatus.stopped
-        self._save_campaign(campaign)
         with self._lock:
+            campaign = self._campaigns.get(campaign_id)
+            if campaign is None and self._campaign_store is not None:
+                campaign = self._campaign_store.load(campaign_id)
+                if campaign is not None:
+                    self._campaigns[campaign_id] = campaign
+            if campaign is None:
+                return False
+            campaign.status = CampaignStatus.stopped
             cancel = self._campaign_cancel.get(campaign_id)
+        self._save_campaign(campaign)
         if cancel is not None:
             cancel.set()  # interrupt the in-flight phase's run_loop before its next turn
         return True
 
     def approve_action(self, campaign_id: str, approval_id: str) -> bool:
-        """Execute one operator-approved held action — the only way a mutating call ever runs."""
-        campaign = self._get_campaign_obj(campaign_id)
-        if campaign is None:
+        """Execute one operator-approved held action — the only way a mutating call ever runs.
+
+        The pending→approved transition is a compare-and-set under ``self._lock`` on the single
+        canonical in-memory campaign object, so two concurrent approvals of the same id cannot
+        both pass the pending check and double-execute a state-changing (possibly destructive)
+        call. The claim happens before execution; only the caller that wins the CAS runs the tool.
+        """
+        with self._lock:
+            campaign = self._campaigns.get(campaign_id)
+            if campaign is None and self._campaign_store is not None:
+                # Promote the on-disk campaign to the canonical in-memory object so the CAS below
+                # (and any concurrent approval) operate on one shared instance, not per-call copies.
+                campaign = self._campaign_store.load(campaign_id)
+                if campaign is not None:
+                    self._campaigns[campaign_id] = campaign
+            if campaign is None:
+                return False
+            approval = next(
+                (p for p in campaign.pending_approvals if p.id == approval_id), None
+            )
+            if approval is None or approval.status != ApprovalStatus.pending:
+                return False
+            # Fail closed on a stale approval: an operator must re-issue an expired hold rather
+            # than have a long-forgotten state-changing action fire (single-use + time-boxed).
+            roe = campaign.config.rules_of_engagement
+            timeout = roe.approval_timeout_seconds if roe is not None else 3600
+            if approval.is_expired(timeout):
+                approval.status = ApprovalStatus.expired
+                expired = True
+            else:
+                # Atomically claim it: a concurrent approve now sees a non-pending status → False.
+                approval.status = ApprovalStatus.approved
+                expired = False
+        if expired:
+            self._save_campaign(campaign)
             return False
-        approval = next(
-            (p for p in campaign.pending_approvals if p.id == approval_id), None
-        )
-        if approval is None or approval.status != ApprovalStatus.pending:
-            return False
-        roe = campaign.config.rules_of_engagement
         ctx = ToolContext(
             authorized_targets=campaign.config.all_authorized(),
             rules_of_engagement=roe,
@@ -734,7 +792,7 @@ class RunService:
             campaign.config.domain
         )
         result = self._registry.execute(approval.tool_call, ctx)
-        approval.status = ApprovalStatus.approved
+        # Status was already claimed (approved) under the lock above; record only the outcome.
         approval.result_log = result.log
         campaign.coverage = record_manual_action(
             campaign.coverage, approval.tool_call, result.ok, approval.phase
@@ -743,15 +801,22 @@ class RunService:
         return True
 
     def reject_action(self, campaign_id: str, approval_id: str) -> bool:
-        campaign = self._get_campaign_obj(campaign_id)
-        if campaign is None:
-            return False
-        approval = next(
-            (p for p in campaign.pending_approvals if p.id == approval_id), None
-        )
-        if approval is None:
-            return False
-        approval.status = ApprovalStatus.rejected
+        # Same atomic claim as approve_action so an approve/reject race resolves to exactly one
+        # terminal state and a rejected action can never later be executed.
+        with self._lock:
+            campaign = self._campaigns.get(campaign_id)
+            if campaign is None and self._campaign_store is not None:
+                campaign = self._campaign_store.load(campaign_id)
+                if campaign is not None:
+                    self._campaigns[campaign_id] = campaign
+            if campaign is None:
+                return False
+            approval = next(
+                (p for p in campaign.pending_approvals if p.id == approval_id), None
+            )
+            if approval is None or approval.status != ApprovalStatus.pending:
+                return False
+            approval.status = ApprovalStatus.rejected
         self._save_campaign(campaign)
         return True
 

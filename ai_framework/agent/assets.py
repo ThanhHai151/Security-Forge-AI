@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from ai_framework.security.fsutil import open_private_append
 from ai_framework.security.redaction import redact_data
 
 ASSET_KINDS = ("endpoint", "param", "form", "tech", "host", "subdomain", "cookie", "other")
@@ -51,14 +52,24 @@ class JsonlAssetStore:
 
     def write(self, asset: Asset) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as fh:
+        with open_private_append(self.path) as fh:
             fh.write(json.dumps(redact_data(asset.model_dump(mode="json"))) + "\n")
 
     def all(self) -> list[Asset]:
         if not self.path.exists():
             return []
+        # Tolerate a truncated final line (e.g. a crash mid-append) or a malformed row instead of
+        # raising — a single bad line must not take down the whole recon view.
+        out: list[Asset] = []
         with self.path.open(encoding="utf-8") as fh:
-            return [Asset.model_validate_json(line) for line in fh if line.strip()]
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    out.append(Asset.model_validate_json(line))
+                except ValueError:
+                    continue
+        return out
 
     def for_target(self, target: str) -> list[Asset]:
         return [a for a in self.all() if a.target == target]

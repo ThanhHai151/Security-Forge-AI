@@ -17,12 +17,16 @@ from ai_framework.notebook.raw_log import RawLogStore
 from ai_framework.notebook.store import NotebookStore
 from ai_framework.taxonomy.tree import Taxonomy
 
+# The technique/evidence separator is a dash surrounded by whitespace (" - " or " — "). Requiring
+# the surrounding spaces means a hyphen *inside* a technique name (Cross-Site Scripting,
+# Server-Side Request Forgery, DOM-based XSS) is kept, not treated as the separator — otherwise a
+# large share of canonical hyphenated vuln-class confirmations were silently dropped.
 _CONFIRMED_RE = re.compile(
-    r"^\s*CONFIRMED:\s*(.+?)\s*(?:\[(critical|high|medium|low|info)\]\s*)?[-—]\s*(.+)$",
+    r"^\s*CONFIRMED:\s*(.+?)\s*(?:\[(critical|high|medium|low|info)\]\s*)?\s+[-—]\s+(.+)$",
     re.IGNORECASE | re.MULTILINE,
 )
 _NEW_FINDING_RE = re.compile(
-    r"^\s*NEW_FINDING_TYPE:\s*(.+?)\s*[-—]\s*JUSTIFICATION:\s*(.+)$",
+    r"^\s*NEW_FINDING_TYPE:\s*(.+?)\s+[-—]\s+JUSTIFICATION:\s*(.+)$",
     re.IGNORECASE | re.MULTILINE,
 )
 

@@ -31,6 +31,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
+from ai_framework.agent.system import fence_untrusted
 from ai_framework.models.base import ActResponse
 from ai_framework.models.eventstream import iter_events
 from ai_framework.models.openai_compat import HttpError, TransportError
@@ -192,7 +193,10 @@ class KiroBackend:
                                     {
                                         "toolUseId": tr.call_id,
                                         "status": "success" if tr.ok else "error",
-                                        "content": [{"text": tr.log}],
+                                        "content": [
+                                            {"text": fence_untrusted(
+                                                tr.log, empty_placeholder="(no output)")}
+                                        ],
                                     }
                                     for tr in turn.tool_results
                                 ]

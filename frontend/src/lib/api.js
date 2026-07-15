@@ -19,10 +19,13 @@ async function jsonOrThrow(res) {
 }
 
 const get = (p) => fetch(`${BASE}${p}`).then(jsonOrThrow);
+// X-SecForge-Client is a non-simple header the backend requires on state-changing requests: a
+// cross-origin drive-by page cannot set it without a CORS preflight it will fail, so it blocks
+// CSRF against the local control plane (see backend/app.py _csrf_ok).
 const send = (method, p, body) =>
   fetch(`${BASE}${p}`, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-SecForge-Client": "secforge-console" },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then(jsonOrThrow);
 

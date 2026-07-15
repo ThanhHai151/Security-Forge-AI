@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
+from ai_framework.agent.system import fence_untrusted
 from ai_framework.models.base import ActResponse
 from ai_framework.models.openai_compat import HttpPost, _urllib_post
 
@@ -111,7 +112,11 @@ class GeminiBackend:
                             {
                                 "functionResponse": {
                                     "name": name_by_id.get(tr.call_id, tr.call_id),
-                                    "response": {"result": tr.log},
+                                    "response": {
+                                        "result": fence_untrusted(
+                                            tr.log, empty_placeholder="(no output)"
+                                        )
+                                    },
                                 }
                             }
                             for tr in turn.tool_results

@@ -21,6 +21,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
+from ai_framework.agent.system import fence_untrusted
 from ai_framework.models.base import ActResponse, normalize_usage
 from ai_framework.models.openai_compat import HttpError, TransportError
 
@@ -106,7 +107,8 @@ class AnthropicCompatBackend:
                     {
                         "role": "user",
                         "content": [
-                            {"type": "tool_result", "tool_use_id": tr.call_id, "content": tr.log}
+                            {"type": "tool_result", "tool_use_id": tr.call_id,
+                             "content": fence_untrusted(tr.log, empty_placeholder="(no output)")}
                             for tr in turn.tool_results
                         ],
                     }

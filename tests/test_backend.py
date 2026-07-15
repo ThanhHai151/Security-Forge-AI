@@ -52,7 +52,14 @@ def api(tmp_path):
 def test_http_post_and_get_run(api, mock_server):
     body = json.dumps({"goal": "recon", "target": mock_server,
                        "authorized_targets": [mock_server]}).encode()
-    with urlopen(Request(f"{api}/runs", data=body, method="POST")) as resp:
+    with urlopen(
+        Request(
+            f"{api}/runs",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json", "X-SecForge-Client": "test"},
+        )
+    ) as resp:
         assert resp.status == 201
         run_id = json.loads(resp.read())["id"]
 

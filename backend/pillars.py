@@ -103,9 +103,15 @@ class PlatformServices:
 
     # ── i18n ──
     def i18n(self, locale: str) -> dict[str, Any]:
-        strings = load_strings(locale) or load_strings("en")
+        # ``locale`` is untrusted URL input; normalize an unknown/traversal value to the default
+        # so neither the file lookup (see i18n.loader.load_strings) nor the echoed response can
+        # be steered by attacker input.
+        from i18n.loader import DEFAULT_LOCALE, LOCALES
+
+        safe_locale = locale if locale in LOCALES else DEFAULT_LOCALE
+        strings = load_strings(safe_locale) or load_strings(DEFAULT_LOCALE)
         return {
-            "locale": locale,
+            "locale": safe_locale,
             "available": available_locales(),
             "strings": strings,
             "glossary": glossary(),

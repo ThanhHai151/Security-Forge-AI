@@ -11,6 +11,7 @@ import os
 from typing import Any
 
 from ai_framework.agent.contracts import RunConfig, ToolCall, Turn
+from ai_framework.agent.system import fence_untrusted
 from ai_framework.models.base import ActResponse
 
 DEFAULT_MODEL = "claude-opus-4-8"
@@ -47,7 +48,14 @@ class AnthropicBackend:
                     {
                         "role": "user",
                         "content": [
-                            {"type": "tool_result", "tool_use_id": tr.call_id, "content": tr.log}
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tr.call_id,
+                                # Tool output is untrusted target data: fence + redact it before
+                                # it reaches the provider so an injected instruction in a page or
+                                # log is framed as evidence, not a command (taint boundary).
+                                "content": fence_untrusted(tr.log, empty_placeholder="(no output)"),
+                            }
                             for tr in turn.tool_results
                         ],
                     }

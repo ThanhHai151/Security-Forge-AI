@@ -298,6 +298,10 @@ def make_handler(
             expected = f"Bearer {configured_token}" if configured_token else ""
             token_ok = bool(expected) and hmac.compare_digest(supplied, expected)
             if token_ok:
+                # A valid bearer token IS the CSRF defense: a browser cannot attach an
+                # Authorization header cross-origin without a CORS preflight it will fail, and a
+                # programmatic client sets it explicitly. Don't burden token clients with the
+                # custom-header/content-type CSRF checks meant for the token-less loopback path.
                 return True
             if configured_token:
                 self._send(401, {"error": "missing or invalid API bearer token"})
@@ -309,6 +313,25 @@ def make_handler(
             origin = self.headers.get("Origin", "").strip()
             if origin and not _is_loopback(urlparse(origin).hostname or ""):
                 self._send(403, {"error": "cross-origin request rejected"})
+                return False
+            # Token-less loopback path: harden state-changing verbs against a browser drive-by.
+            # A cross-origin page cannot set a custom header or send application/json without a
+            # CORS preflight it will fail, so it cannot forge a mutating call to the local API.
+            if self.command in {"POST", "PATCH", "PUT", "DELETE"} and not self._csrf_ok():
+                return False
+            return True
+
+        def _csrf_ok(self) -> bool:
+            """Require JSON content-type and a non-simple custom header on mutating requests."""
+            ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            if ctype and ctype != "application/json":
+                self._send(415, {"error": "state-changing requests must be application/json"})
+                return False
+            if not self.headers.get("X-SecForge-Client", "").strip():
+                self._send(
+                    403,
+                    {"error": "missing X-SecForge-Client header (CSRF protection)"},
+                )
                 return False
             return True
 

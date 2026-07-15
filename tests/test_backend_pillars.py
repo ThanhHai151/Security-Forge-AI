@@ -129,7 +129,9 @@ def test_http_vuln_search_and_i18n(api):
 def test_http_defense_review(api, tmp_path):
     (tmp_path / "vuln.py").write_text("import os\nos.system('ping ' + host)\n", encoding="utf-8")
     body = json.dumps({"path": str(tmp_path)}).encode()
-    with urlopen(Request(f"{api}/defense/review", data=body, method="POST")) as resp:
+    with urlopen(
+        Request(f"{api}/defense/review", data=body, method="POST", headers=_CSRF_HEADERS)
+    ) as resp:
         report = json.loads(resp.read())
     assert any(f["slug"] == "os_command_injection" for f in report["findings"])
 
@@ -137,7 +139,9 @@ def test_http_defense_review(api, tmp_path):
 def test_http_defense_review_bad_path(api):
     body = json.dumps({"path": "/does/not/exist/anywhere"}).encode()
     with pytest.raises(HTTPError) as exc:
-        urlopen(Request(f"{api}/defense/review", data=body, method="POST"))
+        urlopen(
+            Request(f"{api}/defense/review", data=body, method="POST", headers=_CSRF_HEADERS)
+        )
     assert exc.value.code == 400
 
 
@@ -161,9 +165,12 @@ def api_scoped(tmp_path):
         thread.join()
 
 
+_CSRF_HEADERS = {"Content-Type": "application/json", "X-SecForge-Client": "test"}
+
+
 def _post(url, payload):
     body = json.dumps(payload).encode()
-    with urlopen(Request(url, data=body, method="POST")) as resp:
+    with urlopen(Request(url, data=body, method="POST", headers=_CSRF_HEADERS)) as resp:
         return resp.status, json.loads(resp.read())
 
 

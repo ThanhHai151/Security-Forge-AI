@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Callable
+from typing import Any
 from urllib.parse import urlparse
 
 from ai_framework.agent.assets import Asset, JsonlAssetStore
@@ -38,6 +40,7 @@ from ai_framework.agent.system import build_system_prompt, with_memory, with_pla
 from ai_framework.agent.verify import FindingVerifier
 from ai_framework.evidence import EvidenceLedger
 from ai_framework.harness.limits import EngagementLimiter
+from ai_framework.harness.netguard import EgressPolicy
 from ai_framework.headroom import TurnRequest, fit
 from ai_framework.memory.store import JsonlMemoryStore
 from ai_framework.models.base import Backend
@@ -153,6 +156,8 @@ def run_loop(
     cancel: threading.Event | None = None,
     evidence: EvidenceLedger | None = None,
     limiter: EngagementLimiter | None = None,
+    max_model_retries: int = 2,
+    retry_sleep: Callable[[float], None] = time.sleep,
 ) -> Run:
     tools = registry.schemas()
     base_system = build_system_prompt(config, tools)
@@ -176,12 +181,19 @@ def run_loop(
     def validate_redirect(url: str) -> None:
         require_authorized(url, ctx)
 
+    roe = config.rules_of_engagement
+    egress_policy = EgressPolicy(
+        allow_private=bool(roe.allow_private_ranges) if roe is not None else False
+    )
     session = HttpSession(
         user_agent=config.user_agent,
         proxy=config.proxy,
         # urllib follows redirects internally. Re-apply the same scope gate to every hop so an
         # in-scope URL cannot silently bounce the agent into an excluded/off-scope host.
         redirect_validator=validate_redirect,
+        # Resolve-pin-and-gate direct egress: an in-scope name resolving/rebinding to a
+        # private/metadata address is refused at connect time (RoE opts into private ranges).
+        egress_policy=egress_policy,
     )
     ctx.session = session
     target_host = urlparse(config.target).hostname or config.target
@@ -189,6 +201,30 @@ def run_loop(
     if run is None:
         run = Run(config=config)
     ctx.run_id = run.id
+
+    def _with_retry(fn: Callable[[], Any]) -> Any:
+        """Call a backend method with bounded exponential backoff on transient failure.
+
+        A flaky provider (429/5xx/timeout/connection reset) should not abort the whole run on
+        the first hiccup, and an exhausted-retries failure must terminate the loop in a defined,
+        checkpointed ``error`` state — never bubble a raw exception out of the loop.
+        """
+        attempt = 0
+        while True:
+            try:
+                return fn()
+            except Exception:
+                attempt += 1
+                if attempt > max_model_retries:
+                    raise
+                retry_sleep(min(0.5 * (2 ** (attempt - 1)), 8.0))
+
+    def _fit(transcript: list[Turn]) -> Any:
+        assert budget is not None
+        return fit(
+            TurnRequest(system=base_system, transcript=transcript, tools=tools, memory=recalled),
+            budget,
+        )
 
     for i in range(config.step_budget):
         if cancel is not None and cancel.is_set():
@@ -202,24 +238,29 @@ def run_loop(
         # Feed the previous turn's plan forward so planning steers this action (not discarded).
         last_plan = run.transcript[-1].next_plan if run.transcript else ""
 
-        if budget is not None:
-            # Headroom: shape what reaches the backend so the call stays inside the window
-            # with reserved output headroom. It may shrink the recalled memory to fit.
-            fitted = fit(
-                TurnRequest(
-                    system=base_system,
-                    transcript=run.transcript,
-                    tools=tools,
-                    memory=recalled,
-                ),
-                budget,
-            )
-            run.compaction_reports.append(fitted.report)
-            call_system = with_plan(with_memory(fitted.system, fitted.memory), last_plan)
-            action = backend.act(call_system, fitted.transcript, config, fitted.tools)
-        else:
-            call_system = with_plan(with_memory(base_system, recalled), last_plan)
-            action = backend.act(call_system, run.transcript, config, tools)
+        try:
+            if budget is not None:
+                # Headroom: shape what reaches the backend so the call stays inside the window
+                # with reserved output headroom. It may shrink the recalled memory to fit.
+                fitted = _fit(run.transcript)
+                run.compaction_reports.append(fitted.report)
+                call_system = with_plan(with_memory(fitted.system, fitted.memory), last_plan)
+                action = _with_retry(
+                    lambda cs=call_system, f=fitted: backend.act(
+                        cs, f.transcript, config, f.tools
+                    )
+                )
+            else:
+                call_system = with_plan(with_memory(base_system, recalled), last_plan)
+                action = _with_retry(
+                    lambda cs=call_system: backend.act(cs, run.transcript, config, tools)
+                )
+        except Exception as exc:  # noqa: BLE001 - exhausted retries => defined error terminus
+            run.outcome = "error"
+            run.error = f"model act failed: {type(exc).__name__}: {exc}"
+            if on_turn is not None:
+                on_turn(run)
+            break
         if action.done:
             run.outcome = "done"
             break
@@ -299,7 +340,31 @@ def run_loop(
             tool_results=results,
         )
         run.transcript.append(turn)
-        turn.next_plan = backend.plan(call_system, run.transcript, config)
+        # Log-driven planning must see the fresh turn, but the plan call has to respect the same
+        # context budget as `act` — otherwise a long run feeds plan() the full un-fitted
+        # transcript and overflows the window. Re-fit the (now longer) transcript for the plan.
+        try:
+            if budget is not None:
+                plan_fitted = _fit(run.transcript)
+                run.compaction_reports.append(plan_fitted.report)
+                plan_system = with_plan(
+                    with_memory(plan_fitted.system, plan_fitted.memory), last_plan
+                )
+                turn.next_plan = _with_retry(
+                    lambda ps=plan_system, pf=plan_fitted: backend.plan(
+                        ps, pf.transcript, config
+                    )
+                )
+            else:
+                turn.next_plan = _with_retry(
+                    lambda cs=call_system: backend.plan(cs, run.transcript, config)
+                )
+        except Exception as exc:  # noqa: BLE001 - exhausted retries => defined error terminus
+            run.outcome = "error"
+            run.error = f"model plan failed: {type(exc).__name__}: {exc}"
+            if on_turn is not None:
+                on_turn(run)
+            break
 
         if on_turn is not None:
             on_turn(run)

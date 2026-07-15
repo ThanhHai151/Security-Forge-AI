@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from ai_framework.agent.contracts import Run, ToolCall
 from ai_framework.harness.contracts import RulesOfEngagement
+from ai_framework.security.fsutil import restrict, write_private_text
 from ai_framework.security.redaction import redact_data
 
 
@@ -89,6 +90,7 @@ class ApprovalStatus(StrEnum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+    expired = "expired"  # the approval window lapsed before an operator acted — fail closed
 
 
 class CampaignStatus(StrEnum):
@@ -98,6 +100,7 @@ class CampaignStatus(StrEnum):
     hardened = "hardened"          # legacy persisted value; never emitted by new campaigns
     completed = "completed"        # autopilot ran its full phase budget and stopped on its own
     stopped = "stopped"            # operator ended it
+    interrupted = "interrupted"    # was 'running' when the process died; reconciled on next boot
     error = "error"
 
 
@@ -121,6 +124,17 @@ class PendingApproval(BaseModel):
     rationale: str = ""
     status: ApprovalStatus = ApprovalStatus.pending
     result_log: str = ""
+    created_at: datetime = Field(default_factory=_now)
+
+    def is_expired(self, timeout_seconds: int, now: datetime | None = None) -> bool:
+        """True once the approval has been pending longer than the RoE's approval window.
+
+        Stops an 'approve once, replay forever' stale approval from executing a state-changing
+        action long after the operator's context has moved on. ``timeout_seconds <= 0`` disables.
+        """
+        if timeout_seconds <= 0:
+            return False
+        return ((now or _now()) - self.created_at).total_seconds() > timeout_seconds
 
 
 class CampaignConfig(BaseModel):
@@ -144,6 +158,9 @@ class CampaignConfig(BaseModel):
     # Stealth is ON by default for campaigns (the brief: "always pentest in silence").
     opsec_min_interval: float = 2.0
     opsec_jitter: float = 2.0
+    # Privacy: refuse remote model providers for every phase of this campaign (see
+    # RunConfig.local_only). Propagated into each phase's RunConfig by the service.
+    local_only: bool = False
 
     def target_url(self) -> str:
         """The domain as an absolute http(s) URL the loop can fetch."""
@@ -268,12 +285,24 @@ def derive_coverage(run: Run, prior: list[CoverageItem], phase: int) -> list[Cov
     return sorted(items.values(), key=lambda c: (order[c.status], c.technique))
 
 
+# Only ever escalate a technique's status, never downgrade it — shared by derive_coverage and
+# record_manual_action so a later, weaker signal can't erase an earlier confirmation.
+_STATUS_RANK = {
+    CoverageStatus.untried: 0,
+    CoverageStatus.blocked: 1,
+    CoverageStatus.tried: 2,
+    CoverageStatus.confirmed: 3,
+}
+
+
 def record_manual_action(
     coverage: list[CoverageItem], call: ToolCall, ok: bool, phase: int
 ) -> list[CoverageItem]:
     """Fold an operator-approved (previously held) action's result into the coverage map.
 
     A successful state-changing action is a ``confirmed`` impact; a failed one is ``tried``.
+    A failed manual action must NOT downgrade a technique that an earlier phase already confirmed
+    (the escalate-only invariant derive_coverage enforces), so we compare status ranks first.
     """
     items = {c.technique: c for c in coverage}
     slugs = _scan_techniques(f"{call.name} {json.dumps(call.arguments)}") or {"recon"}
@@ -285,7 +314,7 @@ def record_manual_action(
                 technique=slug, description="operator-approved action", status=status,
                 phase=phase, last_run_at=_now(),
             )
-        else:
+        elif _STATUS_RANK[status] >= _STATUS_RANK[cur.status]:
             cur.status = status
             cur.phase = phase
             cur.last_run_at = _now()
@@ -318,14 +347,43 @@ class CampaignStore:
         self.dir.mkdir(parents=True, exist_ok=True)
         tmp = self._path(campaign.id).with_suffix(".json.tmp")
         data = redact_data(campaign.model_dump(mode="json"))
-        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        # Owner-only from creation (rename preserves the mode) — campaigns hold RoE, approvals,
+        # and target data that must not be briefly world-readable.
+        write_private_text(tmp, json.dumps(data, ensure_ascii=False))
         tmp.replace(self._path(campaign.id))
+        restrict(self._path(campaign.id))
 
     def load(self, campaign_id: str) -> Campaign | None:
         path = self._path(campaign_id)
         if not path.is_file():
             return None
         return Campaign.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def reconcile_interrupted(self) -> list[str]:
+        """Flip any campaign still persisted as ``running`` to ``interrupted``.
+
+        A campaign is only ``running`` while a worker thread is executing a phase; that state
+        cannot survive a process exit. On boot, a persisted ``running`` campaign is therefore an
+        orphan from a crash/restart — mark it ``interrupted`` (a terminal, operator-visible state)
+        so it neither looks live nor blocks a fresh continue. Returns the ids reconciled.
+        """
+        if not self.dir.is_dir():
+            return []
+        reconciled: list[str] = []
+        for path in self.dir.glob("*.json"):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if data.get("status") != CampaignStatus.running.value:
+                    continue
+                campaign = Campaign.model_validate(data)
+            except (OSError, json.JSONDecodeError, ValueError):
+                # A corrupt or schema-drifted file must not crash boot (this runs in __init__);
+                # skip it rather than take the whole service down. Mirrors JsonlAssetStore.all().
+                continue
+            campaign.status = CampaignStatus.interrupted
+            self.save(campaign)
+            reconciled.append(campaign.id)
+        return reconciled
 
     def list_campaigns(self) -> list[dict]:
         """Lightweight summaries (newest first) for a campaign-history view."""

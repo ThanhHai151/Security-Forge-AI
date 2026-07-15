@@ -61,7 +61,14 @@ def test_http_runs_endpoint_returns_403_when_disabled(tmp_path, monkeypatch):
     try:
         body = json.dumps({"goal": "g", "target": "http://x"}).encode()
         with pytest.raises(HTTPError) as exc_info:
-            urlopen(Request(f"http://{host}:{port}/runs", data=body, method="POST"))
+            urlopen(
+                Request(
+                    f"http://{host}:{port}/runs",
+                    data=body,
+                    method="POST",
+                    headers={"Content-Type": "application/json", "X-SecForge-Client": "test"},
+                )
+            )
         assert exc_info.value.code == 403
     finally:
         server.shutdown()

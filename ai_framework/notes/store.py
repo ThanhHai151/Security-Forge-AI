@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ai_framework.notes.contracts import Finding
+from ai_framework.security.fsutil import open_private_append
 from ai_framework.security.redaction import redact_data
 
 
@@ -21,7 +22,7 @@ class JsonlFindingStore:
 
     def write(self, finding: Finding) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as fh:
+        with open_private_append(self.path) as fh:
             fh.write(json.dumps(redact_data(finding.model_dump(mode="json"))) + "\n")
 
     def all(self) -> list[Finding]:

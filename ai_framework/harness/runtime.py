@@ -80,8 +80,13 @@ def action_request_for_tool(call: Any, tool: Any, primary_target: str = "") -> A
     elif name in {"load_skill", "decode_encode", "jwt_attack"}:
         action = ActionClass.local_analysis
         target = ""
-    elif name in {"http_get", "inspect_headers", "fetch_robots_sitemap", "browser_render"}:
+    elif name in {"http_get", "inspect_headers", "fetch_robots_sitemap"}:
         action = ActionClass.passive_reconnaissance
+    elif name == "browser_render":
+        # A headless browser executes page JavaScript and pulls subresources, so it is active
+        # enumeration (medium risk, approval-gated on production/critical assets), NOT passive
+        # recon — see ARCHITECTURE.md. Its own route gate additionally blocks non-GET subrequests.
+        action = ActionClass.active_enumeration
     elif name == "http_request":
         method = _text(args.get("method") or "GET").upper()
         headers = args.get("headers") or {}

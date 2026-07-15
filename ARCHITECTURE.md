@@ -3,6 +3,28 @@
 **Review date:** 2026-07-12
 **Status:** supervised security-research prototype; not a production red-team platform.
 
+> **Remediation update — 2026-07-15.** The P0 table in §4 has been worked through. All seven P0
+> items are now addressed in code and covered by regression tests (`tests/test_p0_security_fixes.py`),
+> then adversarially re-reviewed and hardened (`tests/test_phase2_fixes.py`). Summary:
+>
+> | P0 | Status | Where |
+> |---|---|---|
+> | Finding verifier replays arbitrary verbs | **fixed** | `agent/verify.py` — read-only method allow-list, RoE `prohibit` gate, limiter, audit |
+> | Browser executes state-changing JS | **fixed** | `tools/browser.py` — method-gated subrequests + `service_workers="block"`; reclassified active-enumeration |
+> | Prompt/model egress of untrusted text | **fixed** | `agent/system.py` fence+redact (delimiter-injection-safe) across all 6 backends; `local_only` mode |
+> | Control-plane auth / CSRF | **fixed** | `backend/app.py` — content-type + `X-SecForge-Client` on mutating verbs (token clients exempt) |
+> | Frontend XSS | *pre-existing; not in this pass* | tracked (P2 #33) |
+> | Vite `/@fs` exposure | *pre-existing; not in this pass* | tracked (P2 #33) |
+> | Locale traversal | **fixed** | `i18n/loader.py` allow-list; `../ai_accounts` blocked |
+> | Provider SSRF / redirect / rebinding | **fixed** | new `harness/netguard.py` resolve-pin-and-gate egress guard; external-CLI path resolve-validated |
+> | Durable-state races | **fixed** | `service.py` atomic approval CAS; sticky stop; boot-time campaign reconcile |
+>
+> Residuals kept as documented, lower-severity items: loopback is reachable by default (local-lab
+> design choice); the external-CLI egress guard is pre-flight resolution, not socket pinning (a
+> narrow TOCTOU remains because the binary re-resolves); WebSocket data frames and any
+> caller-injected `ctx.renderer` are outside the browser method-gate; approval expiry trusts the
+> wall clock. Full gap inventory and roadmap: `docs/AGENT_REVIEW_2026-07-15.md`.
+
 This document describes the code that is present today, the trust boundaries that matter,
 and the work required before enabling autonomous target traffic. It is deliberately more
 conservative than the product vision: a feature is not a security control until it is

@@ -102,6 +102,10 @@ class RunConfig(BaseModel):
     # for Burp, or a SOCKS-over-HTTP pivot) and/or present a custom User-Agent. Empty = direct.
     proxy: str | None = None
     user_agent: str | None = None
+    # Privacy: when True, refuse to use any remote model provider (only the offline backend is
+    # allowed) so no target-derived prompt text ever leaves the host. Also settable process-wide
+    # via SECFORGE_LOCAL_ONLY=1 (enforced in the backend factory).
+    local_only: bool = False
 
 
 class Run(BaseModel):
